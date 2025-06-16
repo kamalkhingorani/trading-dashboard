@@ -22,6 +22,10 @@ with tabs[1]:
 with tabs[2]:
     st.header("US Stock Recommendations")
     df_us = get_us_recos()
+    if not df_us.empty:
+        # reorder columns
+        cols = ["Symbol", "Date", "Price", "% Rise", "Target", "SL", "Est Days", "Reason", "Status"]
+        df_us = df_us[cols]
     st.dataframe(df_us)
 
 with tabs[3]:
