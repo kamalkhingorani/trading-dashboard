@@ -1,36 +1,50 @@
+# app.py
 import streamlit as st
-from stock_logic import get_indian_recos, get_us_recos
-from news_logic import fetch_live_news
+from stock_logic import get_recommendations, get_us_recos
+from news_logic import get_latest_news
 
-st.set_page_config(page_title="Trading Dashboard", layout="wide")
-tabs = st.tabs(["📰 Live News", "🇮🇳 Indian Stocks", "🇺🇸 US Stocks", "📈 Index & Options"])
+st.set_page_config(page_title="Kamal's Trading Dashboard", layout="wide")
 
+st.title("📊 Kamal's Trading Dashboard")
+
+tabs = st.tabs(["📰 Live News Feed", "🇮🇳 Indian Stock Recommendations", "🇺🇸 US Stock Recommendations", "📈 Index & Options"])
+
+# News Tab
 with tabs[0]:
-    st.header("Live News")
-    news = fetch_live_news()
-    seen = set()
-    for item in news:
-        if item['title'] not in seen:
+    st.header("Live News Feed")
+    news = get_latest_news()
+    if news:
+        for item in news:
             st.markdown(f"- [{item['title']}]({item['link']})")
-            seen.add(item['title'])
+    else:
+        st.info("No items found.")
 
+# Indian Stocks Tab
 with tabs[1]:
-    st.header("Indian Stock Recommendations")
-    df = get_indian_recos()
-    st.dataframe(df)
+    st.header("IN Stock Recommendations")
+    df_in = get_recommendations()
+    if df_in is not None and not df_in.empty:
+        df_in["% to Target"] = ((df_in["Target"] - df_in["Price"]) / df_in["Price"] * 100).round(2)
+        df_in["Est. Days to Target"] = df_in["% to Target"].apply(lambda x: max(1, int(x/1.5)))
+        st.dataframe(df_in)
+    else:
+        st.warning("No Indian stock recommendations available.")
 
+# US Stocks Tab
 with tabs[2]:
     st.header("US Stock Recommendations")
     df_us = get_us_recos()
-    st.write("✅ Columns returned:", df_us.columns.tolist())
+    if df_us is not None and not df_us.empty:
+        try:
+            df_us["% to Target"] = ((df_us["Target"] - df_us["Price"]) / df_us["Price"] * 100).round(2)
+            df_us["Est. Days to Target"] = df_us["% to Target"].apply(lambda x: max(1, int(x/1.5)))
+            st.dataframe(df_us)
+        except KeyError as e:
+            st.error(f"Missing column: {e}")
+    else:
+        st.warning("No US stock recommendations available.")
 
-    preferred_cols = ["Symbol", "Date", "Price", "% Rise", "Target", "SL", "Est Days", "Reason", "Status"]
-    cols_to_show = [c for c in preferred_cols if c in df_us.columns]
-
-    df_show = df_us[cols_to_show] if cols_to_show else df_us
-    st.dataframe(df_show)
-
-
+# Index Tab
 with tabs[3]:
-    st.header("Index & Options Recommendations")
-    st.write("Coming soon—integrating Dhan option signals here.")
+    st.header("Index & Options")
+    st.info("Coming soon. Contact Kamal for advanced deployment access.")
