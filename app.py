@@ -1,6 +1,6 @@
 # app.py
 import streamlit as st
-from stock_logic import get_indian_recos, get_us_recos
+from stock_logic import get_indian_recos
 from news_logic import get_latest_news
 
 st.set_page_config(page_title="Kamal's Trading Dashboard", layout="wide")
