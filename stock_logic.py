@@ -10,8 +10,8 @@ st.header("📈 Indian Stock Recommendations (Delivery Picks)")
 # Define the stock symbols (NSE stocks with Yahoo-compatible tickers)
 def get_indian_recos():
 stock_symbols = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS",
-"LT.NS", "SBIN.NS", "AXISBANK.NS", "MARUTI.NS", "HINDUNILVR.NS"
-]
+"LT.NS", "SBIN.NS", "AXISBANK.NS", "MARUTI.NS", "HINDUNILVR.NS"]
+
 
 recommendations = []
 
