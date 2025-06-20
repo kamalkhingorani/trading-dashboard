@@ -4,7 +4,7 @@ import yfinance as yf
 import pandas as pd
 import pandas_ta as ta
 
-st.header("📈 Indian Stock Recommendations (Delivery Picks)")
+st.header("Indian Stock Recommendations (Delivery Picks)")
 
 
 # Define the stock symbols (NSE stocks with Yahoo-compatible tickers)
