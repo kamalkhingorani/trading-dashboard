@@ -2,7 +2,6 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import ta
 
 st.header("📈 Indian Stock Recommendations (Delivery Picks)")
 
