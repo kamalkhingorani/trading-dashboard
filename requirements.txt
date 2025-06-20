@@ -1,4 +1,5 @@
-streamlit>=1.0
-pandas
+streamlit
+pandas_ta
 requests
-yfiance
+yfinance
+pandas
