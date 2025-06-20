@@ -1,42 +1,54 @@
+
+import streamlit as st
+import yfinance as yf
 import pandas as pd
-import requests
+import ta
 
-def get_indian_recos():
-    data = [
-        {"Symbol":"RELIANCE", "Date":"2025-06-16", "Price":2600, "Target":2730, "SL":2550, "Reason":"Bullish breakout", "Status":"Open"},
-        {"Symbol":"TCS", "Date":"2025-06-16", "Price":3300, "Target":3465, "SL":3200, "Reason":"Earnings volume spike", "Status":"Open"},
-    ]
-    return pd.DataFrame(data)
+st.header("📈 Indian Stock Recommendations (Delivery Picks)")
 
-def get_us_recos():
-    api_key = "demo"  # swap in your own key
-    symbol = "AAPL"
-    url = f"https://financialmodelingprep.com/api/v3/quote-short/{symbol}?apikey={api_key}"
-    resp = requests.get(url).json()
+# Define the stock symbols (NSE stocks with Yahoo-compatible tickers)
+stock_symbols = [
+    "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS",
+    "LT.NS", "SBIN.NS", "AXISBANK.NS", "MARUTI.NS", "HINDUNILVR.NS"
+]
 
-    if not resp or not isinstance(resp, list):
-        # fallback or empty
-        return pd.DataFrame([{"Symbol": symbol, "Price": None, "Target": None, "SL": None, "Reason": "API error", "Date": pd.Timestamp.now()}])
+recommendations = []
 
-    item = resp[0]
-    price = item.get("price")
-    if price is None:
-        return pd.DataFrame([{"Symbol": symbol, "Price": None, "Target": None, "SL": None, "Reason": "Missing price", "Date": pd.Timestamp.now()}])
+for symbol in stock_symbols:
+    try:
+        df = yf.download(symbol, period="6mo", interval="1d", progress=False)
+        df.dropna(inplace=True)
+        df["EMA_20"] = df["Close"].ewm(span=20, adjust=False).mean()
+        df["EMA_50"] = df["Close"].ewm(span=50, adjust=False).mean()
+        df["EMA_100"] = df["Close"].ewm(span=100, adjust=False).mean()
+        df["EMA_200"] = df["Close"].ewm(span=200, adjust=False).mean()
+        df["RSI"] = ta.momentum.RSIIndicator(df["Close"], window=14).rsi()
 
-    target = round(price * 1.05, 2)
-    sl = round(price * 0.97, 2)
-    pct = round(((target - price) / price) * 100, 2)
-    days_est = 5  # example estimate
+        latest = df.iloc[-1]
+        previous = df.iloc[-2]
 
-    data = [{
-        "Symbol": item.get("symbol", symbol),
-        "Date": pd.Timestamp.now().strftime("%Y-%m-%d"),
-        "Price": price,
-        "Target": target,
-        "SL": sl,
-        "% Rise": pct,
-        "Est Days": days_est,
-        "Reason": "Momentum breakout",
-        "Status": "Open"
-    }]
-    return pd.DataFrame(data)
+        # Criteria: EMAs aligned bullish, price > EMA_20, RSI between 40–70, increasing volume
+        if (
+            latest["EMA_20"] > latest["EMA_50"] > latest["EMA_100"] > latest["EMA_200"] and
+            latest["Close"] > latest["EMA_20"] and
+            40 < latest["RSI"] < 70 and
+            latest["Volume"] > previous["Volume"]
+        ):
+            recommendations.append({
+                "Stock": symbol.replace(".NS", ""),
+                "Price": round(latest["Close"], 2),
+                "EMA 20": round(latest["EMA_20"], 2),
+                "EMA 50": round(latest["EMA_50"], 2),
+                "EMA 100": round(latest["EMA_100"], 2),
+                "EMA 200": round(latest["EMA_200"], 2),
+                "RSI": round(latest["RSI"], 2),
+                "Volume": int(latest["Volume"])
+            })
+    except Exception as e:
+        st.warning(f"Error fetching data for {symbol}: {e}")
+
+if recommendations:
+    df_result = pd.DataFrame(recommendations)
+    st.dataframe(df_result, use_container_width=True)
+else:
+    st.info("No bullish stock setups matching criteria were found today.")
