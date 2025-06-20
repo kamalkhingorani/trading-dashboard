@@ -1,6 +1,6 @@
 # app.py
 import streamlit as st
-from stock_logic import get_recommendations, get_us_recos
+from stock_logic import get_indian_recos, get_us_recos
 from news_logic import get_latest_news
 
 st.set_page_config(page_title="Kamal's Trading Dashboard", layout="wide")
@@ -22,7 +22,8 @@ with tabs[0]:
 # Indian Stocks Tab
 with tabs[1]:
     st.header("IN Stock Recommendations")
-    df_in = get_recommendations()
+    df_in = get_indian_recos()
+    df_in = get_us_recos()
     if df_in is not None and not df_in.empty:
         df_in["% to Target"] = ((df_in["Target"] - df_in["Price"]) / df_in["Price"] * 100).round(2)
         df_in["Est. Days to Target"] = df_in["% to Target"].apply(lambda x: max(1, int(x/1.5)))
