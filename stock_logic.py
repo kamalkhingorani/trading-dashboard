@@ -1,7 +1,6 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import pandas_ta as ta
 
 st.header("Indian Stock Recommendations (Delivery Picks)")
 
@@ -16,21 +15,29 @@ def get_indian_recos():
         try:
             df = yf.download(symbol, period="6mo", interval="1d", progress=False)
             df.dropna(inplace=True)
+
+            # Calculate EMAs
             df["EMA_20"] = df["Close"].ewm(span=20, adjust=False).mean()
             df["EMA_50"] = df["Close"].ewm(span=50, adjust=False).mean()
             df["EMA_100"] = df["Close"].ewm(span=100, adjust=False).mean()
             df["EMA_200"] = df["Close"].ewm(span=200, adjust=False).mean()
-            df["RSI"] = ta.momentum.RSIIndicator(df["Close"], window=14).rsi()
+
+            # Calculate RSI
+            delta = df['Close'].diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+            rs = gain / loss
+            df['RSI'] = 100 - (100 / (1 + rs))
 
             latest = df.iloc[-1]
             previous = df.iloc[-2]
 
-            # Criteria: EMAs aligned bullish, price > EMA_20, RSI between 40–70, increasing volume
+            # Criteria: EMAs aligned bullish, price > EMA 20, RSI between 40-70, increasing volume
             if (
-                latest["EMA_20"] > latest["EMA_50"] > latest["EMA_100"] > latest["EMA_200"] and
-                latest["Close"] > latest["EMA_20"] and
-                40 < latest["RSI"] < 70 and
-                latest["Volume"] > previous["Volume"]
+                latest["EMA_20"] > latest["EMA_50"] > latest["EMA_100"] > latest["EMA_200"]
+                and latest["Close"] > latest["EMA_20"]
+                and 40 < latest["RSI"] < 70
+                and latest["Volume"] > previous["Volume"]
             ):
                 recommendations.append({
                     "Stock": symbol.replace(".NS", ""),
@@ -42,6 +49,7 @@ def get_indian_recos():
                     "RSI": round(latest["RSI"], 2),
                     "Volume": int(latest["Volume"])
                 })
+
         except Exception as e:
             st.warning(f"Error fetching data for {symbol}: {e}")
 
@@ -50,6 +58,3 @@ def get_indian_recos():
         st.dataframe(df_result, use_container_width=True)
     else:
         st.info("No bullish stock setups matching criteria were found today.")
-
-# Call the function to display the recommendations
-get_indian_recos()
