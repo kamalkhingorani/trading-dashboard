@@ -1,7 +1,7 @@
-import streamlit as st
 import yfinance as yf
 import pandas as pd
 import pandas_ta as ta
+import streamlit as st
 
 st.header("Indian Stock Recommendations (Delivery Picks)")
 
@@ -27,7 +27,6 @@ def get_indian_recos():
             latest = df.iloc[-1]
             previous = df.iloc[-2]
 
-            # Fetch scalar values for safe comparison
             ema20 = latest["EMA_20"]
             ema50 = latest["EMA_50"]
             ema100 = latest["EMA_100"]
@@ -37,8 +36,16 @@ def get_indian_recos():
             volume = latest["Volume"]
             prev_volume = previous["Volume"]
 
-            # Corrected criteria: compare scalars, not Series
-            if (ema20 > ema50 > ema100 > ema200) and (close > ema20) and (40 < rsi < 70) and (volume > prev_volume):
+            # Bullish candle check: close > open
+            bullish_candle = latest["Close"] > latest["Open"]
+
+            if (
+                (ema20 > ema50 > ema100 > ema200) and
+                (close > ema20) and
+                (rsi > 20) and
+                bullish_candle and
+                (volume > prev_volume)
+            ):
                 recommendations.append({
                     "Stock": symbol.replace(".NS", ""),
                     "Price": round(close, 2),
