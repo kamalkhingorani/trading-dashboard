@@ -1,6 +1,6 @@
 import requests
 
-def fetch_live_news():
+def get_latest_news():
     url = "https://newsapi.org/v2/top-headlines"
     params = {
         "apiKey": "YOUR_NEWSAPI_KEY",
