@@ -1,0 +1,11 @@
+steps:
+  - name: 'gcr.io/k8s-skaffold/pack'
+    args:
+      - 'build'
+      - 'asia-south1-docker.pkg.dev/kamal---dashboard/cloud-run-source-deploy/kamal-trading-dashboard'
+      - '--builder=gcr.io/buildpacks/builder'
+    env:
+      - 'GOOGLE_ENTRYPOINT=streamlit run your_dashboard_file.py'
+
+images:
+  - 'asia-south1-docker.pkg.dev/kamal---dashboard/cloud-run-source-deploy/kamal-trading-dashboard'
