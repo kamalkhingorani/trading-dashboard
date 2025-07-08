@@ -24,7 +24,7 @@ with tabs[0]:
 with tabs[1]:
     st.header("IN Stock Recommendations")
     df_in = get_indian_recos()
-    df_in = get_us_recos()
+    
     if df_in is not None and not df_in.empty:
         df_in["% to Target"] = ((df_in["Target"] - df_in["Price"]) / df_in["Price"] * 100).round(2)
         df_in["Est. Days to Target"] = df_in["% to Target"].apply(lambda x: max(1, int(x/1.5)))
