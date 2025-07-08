@@ -14,6 +14,7 @@ tabs = st.tabs(["📰 Live News Feed", "🇮🇳 Indian Stock Recommendations", 
 with tabs[0]:
     st.header("Live News Feed")
     news = get_latest_news()
+    st_autorefresh(interval=15 * 60 * 1000, key="refresh")  # every 15 min
     if news:
         for item in news:
             st.markdown(f"- [{item['title']}]({item['link']})")
@@ -24,7 +25,7 @@ with tabs[0]:
 with tabs[1]:
     st.header("IN Stock Recommendations")
     df_in = get_indian_recos()
-    
+    st_autorefresh(interval=15 * 60 * 1000, key="refresh")  # every 15 min 
     if df_in is not None and not df_in.empty:
         df_in["% to Target"] = ((df_in["Target"] - df_in["Price"]) / df_in["Price"] * 100).round(2)
         df_in["Est. Days to Target"] = df_in["% to Target"].apply(lambda x: max(1, int(x/1.5)))
@@ -36,6 +37,8 @@ with tabs[1]:
 with tabs[2]:
     st.header("US Stock Recommendations")
     df_us = get_us_recos()
+    st_autorefresh(interval=15 * 60 * 1000, key="refresh")  # every 15 min
+    
     if df_us is not None and not df_us.empty:
         try:
             df_us["% to Target"] = ((df_us["Target"] - df_us["Price"]) / df_us["Price"] * 100).round(2)
@@ -50,3 +53,4 @@ with tabs[2]:
 with tabs[3]:
     st.header("Index & Options")
     st.info("Coming soon. Contact Kamal for advanced deployment access.")
+    st_autorefresh(interval=15 * 60 * 1000, key="refresh")  # every 15 min
