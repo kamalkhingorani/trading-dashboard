@@ -1,16 +1,36 @@
 steps:
+  # 1) Build Docker image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$PROJECT_ID/kamal-dashboard', '.']
+    args:
+      [
+        'build',
+        '-t', 'LOCATION-docker.pkg.dev/$PROJECT_ID/streamlit-repo/streamlit-app:$SHORT_SHA',
+        '.'
+      ]
 
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  # 2) Push Docker image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      [
+        'push',
+        'LOCATION-docker.pkg.dev/$PROJECT_ID/streamlit-repo/streamlit-app:$SHORT_SHA'
+      ]
+
+  # 3) Deploy image to Cloud Run
+  - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: gcloud
-    args: [
-      'run', 'deploy', 'kamal-dashboard',
-      '--image', 'gcr.io/$PROJECT_ID/kamal-dashboard',
-      '--region', 'us-central1',
-      '--platform', 'managed',
-      '--allow-unauthenticated'
-    ]
+    args:
+      [
+        'run', 'deploy', 'streamlit-app-service',
+        '--image', 'LOCATION-docker.pkg.dev/$PROJECT_ID/streamlit-repo/streamlit-app:$SHORT_SHA',
+        '--region', 'us-central1',
+        '--platform', 'managed',
+        '--allow-unauthenticated'
+      ]
 
 images:
-  - 'gcr.io/$PROJECT_ID/kamal-dashboard'
+  - 'LOCATION-docker.pkg.dev/$PROJECT_ID/streamlit-repo/streamlit-app:$SHORT_SHA'
+
+options:
+  # Ensure build logs go only to Cloud Logging
+  logging: CLOUD_LOGGING_ONLY
