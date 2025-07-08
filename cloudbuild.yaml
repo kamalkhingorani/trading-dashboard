@@ -1,3 +1,5 @@
+options:
+  logging: CLOUD_LOGGING_ONLY
 steps:
   - name: 'gcr.io/k8s-skaffold/pack'
     args:
@@ -10,5 +12,4 @@ steps:
 images:
   - 'asia-south1-docker.pkg.dev/kamal---dashboard/cloud-run-source-deploy/kamal-trading-dashboard'
 
-  options:
-  logging: CLOUD_LOGGING_ONLY
+  
