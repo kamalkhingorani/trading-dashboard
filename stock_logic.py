@@ -1,15 +1,21 @@
 import yfinance as yf
 import pandas as pd
-import pandas_ta as ta
-import streamlit as st
+from datetime import datetime
 
-st.header("Indian Stock Recommendations (Delivery Picks)")
+# --- Trackers ---
+us_reco_tracker = {}
+indian_reco_tracker = {}
 
-def get_indian_recos():
-    stock_symbols = [
-        "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS",
-        "LT.NS", "SBIN.NS", "AXISBANK.NS", "MARUTI.NS", "HINDUNILVR.NS"
-    ]
+# --- US Stock Recommendation ---
+def get_us_recos():
+    sp500_url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
+    try:
+        table = pd.read_html(sp500_url)
+        sp500_df = table[0]
+        stock_symbols = sp500_df['Symbol'].tolist()
+    except Exception as e:
+        print(f"Error fetching S&P 500 symbols: {e}")
+        return pd.DataFrame()
 
     recommendations = []
 
@@ -18,50 +24,107 @@ def get_indian_recos():
             df = yf.download(symbol, period="6mo", interval="1d", progress=False)
             df.dropna(inplace=True)
 
-            df["EMA_20"] = df["Close"].ewm(span=20, adjust=False).mean()
-            df["EMA_50"] = df["Close"].ewm(span=50, adjust=False).mean()
-            df["EMA_100"] = df["Close"].ewm(span=100, adjust=False).mean()
-            df["EMA_200"] = df["Close"].ewm(span=200, adjust=False).mean()
-            df["RSI"] = ta.momentum.RSIIndicator(df["Close"], window=14).rsi()
+            df["EMA_20"] = df["Close"].ewm(span=20).mean()
+            df["EMA_50"] = df["Close"].ewm(span=50).mean()
+            df["EMA_100"] = df["Close"].ewm(span=100).mean()
+            df["EMA_200"] = df["Close"].ewm(span=200).mean()
+
+            delta = df['Close'].diff()
+            gain = delta.where(delta > 0, 0).rolling(window=14).mean()
+            loss = -delta.where(delta < 0, 0).rolling(window=14).mean()
+            rs = gain / loss
+            df["RSI"] = 100 - (100 / (1 + rs))
 
             latest = df.iloc[-1]
             previous = df.iloc[-2]
 
-            ema20 = latest["EMA_20"]
-            ema50 = latest["EMA_50"]
-            ema100 = latest["EMA_100"]
-            ema200 = latest["EMA_200"]
-            close = latest["Close"]
-            rsi = latest["RSI"]
-            volume = latest["Volume"]
-            prev_volume = previous["Volume"]
-
-            # Bullish candle check: close > open
-            bullish_candle = latest["Close"] > latest["Open"]
-
             if (
-                (ema20 > ema50 > ema100 > ema200) and
-                (close > ema20) and
-                (rsi > 20) and
-                bullish_candle and
-                (volume > prev_volume)
+                latest["RSI"] > 20 and
+                latest["Close"] > latest["Open"] and
+                latest["Volume"] > previous["Volume"]
             ):
-                recommendations.append({
-                    "Stock": symbol.replace(".NS", ""),
-                    "Price": round(close, 2),
-                    "EMA 20": round(ema20, 2),
-                    "EMA 50": round(ema50, 2),
-                    "EMA 100": round(ema100, 2),
-                    "EMA 200": round(ema200, 2),
-                    "RSI": round(rsi, 2),
-                    "Volume": int(volume)
-                })
+                ltp = round(latest["Close"], 2)
+                target = round(ltp * 1.05, 2)
+                sl = round(min(latest["Low"], latest["EMA_20"], latest["EMA_50"]), 2)
+
+                reco = {
+                    "Date": datetime.now().strftime('%Y-%m-%d'),
+                    "Stock": symbol,
+                    "Price": ltp,
+                    "Target": target,
+                    "Stop Loss": sl,
+                    "% to Target": round(((target - ltp) / ltp) * 100, 2),
+                    "Status": "Active",
+                }
+
+                us_reco_tracker[symbol] = reco
+                recommendations.append(reco)
 
         except Exception as e:
-            st.warning(f"Error fetching data for {symbol}: {e}")
+            print(f"Error with US stock {symbol}: {e}")
 
-    if recommendations:
-        df_result = pd.DataFrame(recommendations)
-        st.dataframe(df_result, use_container_width=True)
-    else:
-        st.info("No bullish stock setups matching criteria were found today.")
+    return pd.DataFrame(recommendations)
+
+# --- Indian Stock Recommendation ---
+def get_indian_recos():
+    try:
+        nse100 = [
+            "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS", "LT.NS",
+            "SBIN.NS", "AXISBANK.NS", "MARUTI.NS", "HINDUNILVR.NS", "ITC.NS", "WIPRO.NS",
+            "BHARTIARTL.NS", "KOTAKBANK.NS", "SUNPHARMA.NS", "HCLTECH.NS", "BAJFINANCE.NS",
+            "ADANIENT.NS", "ULTRACEMCO.NS", "ASIANPAINT.NS", "DMART.NS", "BAJAJFINSV.NS"
+        ]
+    except Exception as e:
+        print(f"Error defining stock universe: {e}")
+        return pd.DataFrame()
+
+    recommendations = []
+
+    for symbol in nse100:
+        try:
+            df = yf.download(symbol, period="6mo", interval="1d", progress=False)
+            df.dropna(inplace=True)
+
+            if df["Close"].iloc[-1] < 25:
+                continue
+
+            df["EMA_20"] = df["Close"].ewm(span=20).mean()
+            df["EMA_50"] = df["Close"].ewm(span=50).mean()
+            df["EMA_100"] = df["Close"].ewm(span=100).mean()
+            df["EMA_200"] = df["Close"].ewm(span=200).mean()
+
+            delta = df['Close'].diff()
+            gain = delta.where(delta > 0, 0).rolling(window=14).mean()
+            loss = -delta.where(delta < 0, 0).rolling(window=14).mean()
+            rs = gain / loss
+            df["RSI"] = 100 - (100 / (1 + rs))
+
+            latest = df.iloc[-1]
+            previous = df.iloc[-2]
+
+            if (
+                latest["RSI"] > 20 and
+                latest["Close"] > latest["Open"] and
+                latest["Volume"] > previous["Volume"]
+            ):
+                ltp = round(latest["Close"], 2)
+                target = round(ltp * 1.05, 2)
+                sl = round(min(latest["Low"], latest["EMA_20"], latest["EMA_50"]), 2)
+
+                reco = {
+                    "Date": datetime.now().strftime('%Y-%m-%d'),
+                    "Stock": symbol.replace(".NS", ""),
+                    "Price": ltp,
+                    "Target": target,
+                    "Stop Loss": sl,
+                    "% to Target": round(((target - ltp) / ltp) * 100, 2),
+                    "Status": "Active",
+                }
+
+                indian_reco_tracker[symbol] = reco
+                recommendations.append(reco)
+
+        except Exception as e:
+            print(f"Error with Indian stock {symbol}:
+
+            return pd.DataFrame(recommendations)
