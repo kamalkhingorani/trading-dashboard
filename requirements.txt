@@ -5,3 +5,5 @@ yfinance
 pandas
 pandas_ta
 streamlit_autorefresh
+feedparser
+numpy
