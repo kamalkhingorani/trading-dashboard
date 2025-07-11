@@ -1,42 +1,4 @@
-@st.cache_data(ttl=86400)
-def get_complete_sp500_universe():
-    """Complete S&P 500 with comprehensive sector coverage"""
-    sp500_universe = [
-        # TECHNOLOGY & SOFTWARE
-        "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "TSLA", "META", "NVDA", "NFLX", "ADBE",
-        "CRM", "ORCL", "INTC", "AMD", "QCOM", "AVGO", "CSCO", "IBM", "INTU", "NOW",
-        "WDAY", "VEEV", "DDOG", "SNOW", "CRWD", "ZS", "OKTA", "SPLK", "MDB", "NET",
-        "TEAM", "ATLASSIAN", "SHOP", "SQ", "PYPL", "ADSK", "ANSS", "CDNS", "SNPS", "FTNT",
-        "PANW", "CYBR", "TENB", "QLYS", "ESTC", "DOMO", "TWLO", "ZM", "DOCU", "UBER",
-        
-        # FINANCIAL SERVICES & BANKING
-        "JPM", "BAC", "WFC", "GS", "MS", "C", "AXP", "V", "MA", "PYPL",
-        "BK", "USB", "PNC", "COF", "SCHW", "BLK", "SPGI", "MCO", "AIG", "TRV",
-        "ALL", "PGR", "CB", "AON", "MMC", "MSCI", "ICE", "CME", "NDAQ", "CBOE",
-        "KKR", "BX", "APO", "CG", "OWL", "ARES", "TPG", "HLNE", "BLUE", "EQH",
-        
-        # HEALTHCARE & PHARMACEUTICALS
-        "JNJ", "PFE", "UNH", "ABBV", "TMO", "ABT", "MDT", "BMY", "AMGN", "GILD",
-        "REGN", "BSX", "SYK", "ISRG", "ZBH", "BDX", "EW", "ALGN", "MRNA", "BNTX",
-        "DHR", "A", "BAX", "BIO", "TECH", "PKI", "WAT", "MTD", "TFX", "WST",
-        "CVS", "CI", "ANTM", "HUM", "CNC", "MOH", "ELV", "HCA", "THC", "UHS",
-        "BIIB", "VRTX", "ILMN", "DXCM", "PODD", "TNDM", "OMCL", "TDOC", "HOLX", "VAR",
-        
-        # DEFENSE & AEROSPACE
-        "BA", "LMT", "RTX", "NOC", "GD", "LHX", "LDOS", "HII", "TDG", "CW",
-        "SPR", "AIR", "KTOS", "AVX", "HEI", "TXT", "PH", "ROL", "CACI", "SAIC",
-        
-        # MANUFACTURING & INDUSTRIALS
-        "CAT", "GE", "MMM", "HON", "UPS", "FDX", "EMR", "ETN", "ITW", "PH",
-        "CMI", "DE", "DOV", "ROK", "PNR", "AME", "ROP", "FTV", "XYL", "ITT",
-        "IR", "GNRC", "CARR", "OTIS", "PCAR", "CMI", "WAB", "CHRW", "JBHT", "EXPD",
-        "NSC", "CSX", "UNP", "KSU", "CNI", "CP", "TRN", "GWR", "RAIL", "GATX",
-        
-        # ENERGY & UTILITIES
-        "XOM", "CVX", "COP", "EOG", "SLB", "MPC", "VLO", "PSX", "OXY", "HAL",
-        "DVN", "FANG", "APA", "EQT", "COG", "MRO", "CNX", "RRC", "AR", "SM",
-        "KMI", "WMB", "OKE", "EPD", "ET", "MPLX", "PAA", "WES", "ENLC", "SMLP",
-        import streamlit as st
+import streamlit as st
 import pandas as pd
 import yfinance as yf
 import requests
@@ -180,125 +142,63 @@ def get_complete_nse_universe():
         "MOTHERSUMI.NS", "BOSCHLTD.NS", "ESCORTS.NS", "BALKRISIND.NS", "MRF.NS",
         "APOLLOTYRE.NS", "CEAT.NS", "JK TYRE.NS", "GOODYEAR.NS", "SUBROS.NS",
         "GABRIEL.NS", "ENDURANCE.NS", "SUPRAJIT.NS", "SUNDRMFAST.NS", "MINDAIND.NS",
-        "CRAFTSMAN.NS", "TEAMLEASE.NS", "FIEM.NS", "SETCO.NS", "RANE.NS",
-        
-        # ENERGY & POWER (Critical Infrastructure)
-        "RELIANCE.NS", "ONGC.NS", "IOC.NS", "BPCL.NS", "HPCL.NS", "GAIL.NS",
-        "OIL.NS", "MRPL.NS", "CHENNPETRO.NS", "GSPL.NS", "IGL.NS", "MGL.NS",
-        "PETRONET.NS", "NTPC.NS", "POWERGRID.NS", "NHPC.NS", "SJVN.NS", "THDC.NS",
-        "RPOWER.NS", "ADANIPOWER.NS", "TORNTPOWER.NS", "JSWENERGY.NS", "TATAPWR.NS",
-        "CESC.NS", "TORNTPHARM.NS", "ADANIGREEN.NS", "RENUKA.NS", "SUZLON.NS",
-        "INOXWIND.NS", "WEBSOL.NS", "SOLARA.NS", "BOROSIL.NS", "HFCL.NS",
-        
-        # METALS & MINING (Commodity Play)
-        "TATASTEEL.NS", "JSWSTEEL.NS", "HINDALCO.NS", "VEDL.NS", "SAIL.NS",
-        "JINDALSTEL.NS", "NMDC.NS", "MOIL.NS", "COALINDIA.NS", "HEG.NS",
-        "GRAPHITE.NS", "WELCORP.NS", "RATNAMANI.NS", "APL.NS", "KALYANI.NS",
-        "MAHINDCIE.NS", "BHARATFORG.NS", "RAMCOCEM.NS", "DALBHARAT.NS", "HEIDELBERG.NS",
-        "JKCEMENT.NS", "INDIACEM.NS", "STARCEMENT.NS", "PRISMCEM.NS", "ORIENTCEM.NS",
-        
-        # AGRICULTURE & FERTILIZERS (Food Security)
-        "UBL.NS", "CHAMBLFERT.NS", "COROMANDEL.NS", "GSFC.NS", "NFL.NS",
-        "RCF.NS", "FACT.NS", "DEEPAKNTR.NS", "GNFC.NS", "KRIBHCO.NS",
-        "MANGALAM.NS", "MADRASFERT.NS", "ZUARI.NS", "PARADEEP.NS", "SRF.NS",
-        "ATUL.NS", "TATACHEMICALS.NS", "NOCIL.NS", "ALKYLAMINE.NS", "BALAJI.NS",
-        "BASF.NS", "NAVIN.NS", "FLUOROCHEM.NS", "GHCL.NS", "PIDILITE.NS",
-        
-        # TELECOM & MEDIA (Digital Connectivity)
-        "BHARTIARTL.NS", "IDEA.NS", "RCOM.NS", "GTLINFRA.NS", "GTPL.NS",
-        "HATHWAY.NS", "SITI.NS", "DISHTV.NS", "TATACOMM.NS", "RAILTEL.NS",
-        "ZEEL.NS", "SUNTV.NS", "PVRINOX.NS", "INOXLEISUR.NS", "GIPCL.NS",
-        "NETWORK18.NS", "TVTODAY.NS", "JAGRAN.NS", "HTMEDIA.NS", "SAREGAMA.NS",
-        
-        # TRANSPORT & LOGISTICS (Supply Chain)
-        "CONCOR.NS", "IRCTC.NS", "GATI.NS", "BLUEDART.NS", "TCIEXPRESS.NS",
-        "MAHLOG.NS", "DELHIVERY.NS", "DTDC.NS", "VAGAS.NS", "SNOWMAN.NS",
-        "COLDEX.NS", "ALLCARGO.NS", "EXIDEIND.NS", "AMARARAJA.NS", "HBL.NS",
-        
-        # REAL ESTATE & HOUSING (Urbanization Play)
-        "DLF.NS", "GODREJPROP.NS", "SOBHA.NS", "BRIGADE.NS", "PRESTIGE.NS",
-        "KOLTEPATIL.NS", "PURAVANKARA.NS", "MAHLIFE.NS", "SUNTECK.NS", "PHOENIXLTD.NS",
-        "OBEROIRLTY.NS", "UNITECH.NS", "ASHIANA.NS", "HOMESFIRST.NS", "VAIBHAVGBL.NS",
-        "MACROTECH.NS", "LODHA.NS", "SIGNATURE.NS", "BROOKFIELD.NS", "EMBASSY.NS",
-        
-        # FMCG & CONSUMER GOODS (Daily Consumption)
-        "HINDUNILVR.NS", "ITC.NS", "BRITANNIA.NS", "NESTLEIND.NS", "DABUR.NS",
-        "MARICO.NS", "GODREJCP.NS", "COLPAL.NS", "EMAMILTD.NS", "VIPIND.NS",
-        "BAJAJCONS.NS", "JYOTHYLAB.NS", "VBLVOL.NS", "RADICO.NS", "UBL.NS",
-        "MCDOWELL-N.NS", "GLOBALBEES.NS", "HONASA.NS", "GILLETTE.NS", "PRATAPOIL.NS",
-        
-        # TEXTILES & FASHION (Export Oriented)
-        "RAYMOND.NS", "ARVIND.NS", "WELCORP.NS", "CENTURYTEX.NS", "ALOKTEXT.NS",
-        "VARDHMAN.NS", "TRIDENT.NS", "HIMATSEIDE.NS", "KPRMILL.NS", "SPENTEX.NS",
-        "TEXRAIL.NS", "RIIL.NS", "RSWM.NS", "INDORAMA.NS", "FILATEX.NS",
-        
-        # NEW AGE & TECH STARTUPS (Digital Economy)
-        "ZOMATO.NS", "NYKAA.NS", "PAYTM.NS", "POLICYBZR.NS", "DELHIVERY.NS",
-        "EASEMYTRIP.NS", "CARTRADE.NS", "MATRIMONY.NS", "JUSTDIAL.NS", "INDIAMART.NS",
-        "NAZARA.NS", "CAMPUS.NS", "DEVYANI.NS", "SAPPHIRE.NS", "TATVA.NS",
-        "METRO.NS", "CLEAN.NS", "LAXMI.NS", "SIGNATURE.NS", "STARHEALTH.NS"
+        "CRAFTSMAN.NS", "TEAMLEASE.NS", "FIEM.NS", "SETCO.NS", "RANE.NS"
     ]
-    return nse_universe[:400]  # Comprehensive coverage - 400 stocks across ALL sectors
+    return nse_universe[:300]  # Limit to 300 for resource optimization
 
 @st.cache_data(ttl=86400)
 def get_complete_sp500_universe():
-    """Complete S&P 500 universe for rotating batches"""
+    """Complete S&P 500 with comprehensive sector coverage"""
     sp500_universe = [
-        # Tech Giants
+        # TECHNOLOGY & SOFTWARE
         "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "TSLA", "META", "NVDA", "NFLX", "ADBE",
         "CRM", "ORCL", "INTC", "AMD", "QCOM", "AVGO", "CSCO", "IBM", "INTU", "NOW",
         "WDAY", "VEEV", "DDOG", "SNOW", "CRWD", "ZS", "OKTA", "SPLK", "MDB", "NET",
+        "TEAM", "SHOP", "SQ", "PYPL", "ADSK", "ANSS", "CDNS", "SNPS", "FTNT",
+        "PANW", "CYBR", "TENB", "QLYS", "ESTC", "DOMO", "TWLO", "ZM", "DOCU", "UBER",
         
-        # Financial Services
+        # FINANCIAL SERVICES & BANKING
         "JPM", "BAC", "WFC", "GS", "MS", "C", "AXP", "V", "MA", "PYPL",
         "BK", "USB", "PNC", "COF", "SCHW", "BLK", "SPGI", "MCO", "AIG", "TRV",
         "ALL", "PGR", "CB", "AON", "MMC", "MSCI", "ICE", "CME", "NDAQ", "CBOE",
+        "KKR", "BX", "APO", "CG", "OWL", "ARES", "TPG", "HLNE", "BLUE", "EQH",
         
-        # Healthcare & Pharmaceuticals
+        # HEALTHCARE & PHARMACEUTICALS
         "JNJ", "PFE", "UNH", "ABBV", "TMO", "ABT", "MDT", "BMY", "AMGN", "GILD",
         "REGN", "BSX", "SYK", "ISRG", "ZBH", "BDX", "EW", "ALGN", "MRNA", "BNTX",
         "DHR", "A", "BAX", "BIO", "TECH", "PKI", "WAT", "MTD", "TFX", "WST",
+        "CVS", "CI", "ANTM", "HUM", "CNC", "MOH", "ELV", "HCA", "THC", "UHS",
+        "BIIB", "VRTX", "ILMN", "DXCM", "PODD", "TNDM", "OMCL", "TDOC", "HOLX", "VAR",
         
-        # Consumer Discretionary & Staples
+        # DEFENSE & AEROSPACE
+        "BA", "LMT", "RTX", "NOC", "GD", "LHX", "LDOS", "HII", "TDG", "CW",
+        "SPR", "AIR", "KTOS", "AVX", "HEI", "TXT", "PH", "ROL", "CACI", "SAIC",
+        
+        # MANUFACTURING & INDUSTRIALS
+        "CAT", "GE", "MMM", "HON", "UPS", "FDX", "EMR", "ETN", "ITW", "PH",
+        "CMI", "DE", "DOV", "ROK", "PNR", "AME", "ROP", "FTV", "XYL", "ITT",
+        "IR", "GNRC", "CARR", "OTIS", "PCAR", "CMI", "WAB", "CHRW", "JBHT", "EXPD",
+        "NSC", "CSX", "UNP", "KSU", "CNI", "CP", "TRN", "GWR", "RAIL", "GATX",
+        
+        # ENERGY & UTILITIES
+        "XOM", "CVX", "COP", "EOG", "SLB", "MPC", "VLO", "PSX", "OXY", "HAL",
+        "DVN", "FANG", "APA", "EQT", "COG", "MRO", "CNX", "RRC", "AR", "SM",
+        "KMI", "WMB", "OKE", "EPD", "ET", "MPLX", "PAA", "WES", "ENLC", "SMLP",
+        "NEE", "DUK", "SO", "AEP", "EXC", "XEL", "WEC", "ES", "AWK", "CMS",
+        "CNP", "NI", "LNT", "EVRG", "ATO", "NRG", "PEG", "EIX", "PCG", "ED",
+        
+        # RETAIL & CONSUMER
         "WMT", "HD", "LOW", "COST", "TGT", "PG", "KO", "PEP", "MCD", "SBUX",
         "NKE", "TJX", "ROST", "YUM", "CMG", "ULTA", "ETSY", "EBAY", "DIS", "F",
         "GM", "TSLA", "LCID", "RIVN", "KMX", "AN", "LAD", "ABG", "SAH", "LEN",
+        "DHI", "PHM", "TOL", "KBH", "MTH", "TMHC", "LGIH", "MHO", "GRBK", "CVCO",
+        "MAR", "HLT", "H", "IHG", "WH", "RHP", "PENN", "MGM", "LVS", "WYNN",
         
-        # Industrial & Materials
-        "BA", "CAT", "GE", "MMM", "HON", "UPS", "FDX", "XOM", "CVX", "COP",
-        "EOG", "SLB", "MPC", "VLO", "PSX", "OXY", "HAL", "DVN", "FANG", "APA",
+        # MATERIALS & CHEMICALS
         "LIN", "APD", "ECL", "SHW", "FCX", "NEM", "FMC", "ALB", "EMN", "IFF",
-        
-        # Communication Services
-        "VZ", "T", "TMUS", "CMCSA", "CHTR", "FOXA", "FOX", "NWSA", "NWS", "PARA",
-        "WBD", "DISH", "SIRI", "TWTR", "SNAP", "PINS", "MTCH", "ZM", "DOCU", "UBER",
-        
-        # Utilities & REITs
-        "NEE", "DUK", "SO", "AEP", "EXC", "XEL", "WEC", "ES", "AWK", "CMS",
-        "CNP", "NI", "LNT", "EVRG", "ATO", "NRG", "PEG", "EIX", "PCG", "ED",
-        "AMT", "PLD", "EQIX", "SPG", "O", "PSA", "EQR", "AVB", "ARE", "DLR",
-        
-        # Energy & Materials Extended
-        "KMI", "WMB", "OKE", "EPD", "ET", "MPLX", "PAA", "WES", "ENLC", "SMLP",
-        "PPG", "CF", "MOS", "LYB", "DOW", "DD", "CE", "VMC", "MLM", "NUE",
-        
-        # Healthcare Extended
-        "CVS", "CI", "ANTM", "HUM", "CNC", "MOH", "ELV", "HCA", "THC", "UHS",
-        "DXCM", "PODD", "TNDM", "OMCL", "TDOC", "VEEV", "ZBH", "HOLX", "VAR", "NVST",
-        
-        # Technology Extended
-        "TEAM", "ATLASSIAN", "SHOP", "SQ", "PYPL", "ADSK", "ANSS", "CDNS", "SNPS", "FTNT",
-        "PANW", "CYBR", "TENB", "RPD", "QLYS", "FEYE", "VRNS", "SAIL", "ESTC", "DOMO",
-        
-        # Consumer Extended
-        "AMZN", "BABA", "JD", "PDD", "MELI", "SE", "GRAB", "UBER", "LYFT", "DASH",
-        "ABNB", "BKNG", "EXPE", "TRIP", "NCLH", "CCL", "RCL", "MAR", "HLT", "H",
-        
-        # Biotech & Pharma Extended
-        "BIIB", "CELG", "VRTX", "ILMN", "ALXN", "INCY", "EXAS", "ARWR", "BEAM", "CRSP",
-        "EDIT", "NTLA", "BLUE", "FOLD", "MRNA", "BNTX", "NVAX", "INO", "OCGN", "VXRT"
+        "PPG", "CF", "MOS", "LYB", "DOW", "DD", "CE", "VMC", "MLM", "NUE"
     ]
-    return sp500_universe[:250]  # Limit to 250 for manageable scanning
+    return sp500_universe[:250]  # Limit to 250 for resource optimization
 
 def calculate_rsi(data, window=14):
     """Memory-efficient RSI calculation"""
@@ -318,7 +218,6 @@ def get_next_batch(symbols, batch_size, current_batch_num):
     
     # Handle wrap-around
     if end_idx - start_idx < batch_size and start_idx > 0:
-        # Get remaining symbols from beginning
         remaining_needed = batch_size - (end_idx - start_idx)
         batch = symbols[start_idx:end_idx] + symbols[:remaining_needed]
         next_batch_num = (current_batch_num + 1) % total_batches
@@ -380,47 +279,40 @@ def scan_rotating_batch(symbols, min_price, max_rsi, market_type, batch_size, cu
             # Enhanced filtering for better opportunities
             price_filter = current_price >= min_price
             rsi_filter = rsi <= max_rsi
-            volume_filter = volume_ratio > 1.0  # Above average volume
+            volume_filter = volume_ratio > 1.0
             trend_filter = latest['Close'] > latest['EMA20']
             momentum_filter = latest['EMA20'] > latest['EMA50']
             
             if price_filter and rsi_filter and volume_filter and trend_filter:
-                # Calculate volatility-based targets
+                # Calculate targets
                 returns = data['Close'].pct_change().dropna()
                 volatility = returns.std()
                 
                 if market_type == "Indian":
                     if volatility > 0.03:
-                        target_pct = 0.12  # 12% for high volatility
+                        target_pct = 0.12
                         days_estimate = 12
                     elif volatility > 0.02:
-                        target_pct = 0.08  # 8% for medium volatility
+                        target_pct = 0.08
                         days_estimate = 15
                     else:
-                        target_pct = 0.06  # 6% for low volatility
+                        target_pct = 0.06
                         days_estimate = 20
                     sl_pct = 0.07
                 else:  # US market
                     if volatility > 0.025:
-                        target_pct = 0.10  # 10% for high volatility
+                        target_pct = 0.10
                         days_estimate = 10
                     elif volatility > 0.018:
-                        target_pct = 0.07  # 7% for medium volatility
+                        target_pct = 0.07
                         days_estimate = 12
                     else:
-                        target_pct = 0.05  # 5% for low volatility
+                        target_pct = 0.05
                         days_estimate = 18
                     sl_pct = 0.06
                 
                 target = current_price * (1 + target_pct)
                 sl = current_price * (1 - sl_pct)
-                
-                # Quality score based on multiple factors
-                quality_score = 0
-                if volume_ratio > 1.5: quality_score += 1  # High volume
-                if momentum_filter: quality_score += 1      # EMA alignment
-                if rsi < 30: quality_score += 1             # Oversold
-                if volatility > 0.02: quality_score += 1    # Good movement potential
                 
                 recommendations.append({
                     'Date': datetime.now().strftime('%Y-%m-%d'),
@@ -432,7 +324,6 @@ def scan_rotating_batch(symbols, min_price, max_rsi, market_type, batch_size, cu
                     'Est. Days': days_estimate,
                     'Stop Loss': round(sl, 2),
                     'Volume Ratio': round(volume_ratio, 2),
-                    'Quality Score': quality_score,
                     'Batch': f"{current_batch_num + 1}/{total_batches}",
                     'Status': 'Active'
                 })
@@ -446,7 +337,6 @@ def scan_rotating_batch(symbols, min_price, max_rsi, market_type, batch_size, cu
     progress_bar.empty()
     status_placeholder.empty()
     
-    # Update session state with next batch number
     return pd.DataFrame(recommendations), next_batch_num
 
 def fetch_news_optimized():
@@ -461,7 +351,7 @@ def fetch_news_optimized():
     for source_name, url in sources.items():
         try:
             feed = feedparser.parse(url)
-            for entry in feed.entries[:12]:  # More news items
+            for entry in feed.entries[:12]:
                 title = entry.get('title', 'No Title')
                 summary = entry.get('summary', entry.get('description', ''))[:400]
                 link = entry.get('link', '#')
@@ -492,9 +382,9 @@ def fetch_news_optimized():
     
     impact_order = {'High': 3, 'Medium': 2, 'Low': 1}
     all_news.sort(key=lambda x: impact_order.get(x['market_impact'], 0), reverse=True)
-    return all_news[:40]  # More news items
+    return all_news[:40]
 
-# Initialize session state for batch tracking
+# Initialize session state
 if 'indian_recos' not in st.session_state:
     st.session_state.indian_recos = pd.DataFrame()
 if 'us_recos' not in st.session_state:
@@ -539,16 +429,9 @@ st.sidebar.markdown(f"""
 • Energy & Power
 • Technology & Software
 • Retail & Consumer
-• Metals & Mining
-• Agriculture & Fertilizers
-• Telecom & Media
-• Real Estate & Housing
-• FMCG & Textiles
-• New Age & Startups
 
 🇺🇸 S&P 500: {len(sp500_universe)} stocks
-• All 11 GICS Sectors Covered
-• Complete Market Representation
+• All Major Sectors Covered
 
 **🔄 Professional Batch System**
 NSE: Batch {st.session_state.nse_batch_num + 1}
@@ -569,8 +452,8 @@ if st.sidebar.button("🔄 Reset Batch Counters"):
 # Create tabs
 tab1, tab2, tab3, tab4 = st.tabs([
     "📰 Market News", 
-    f"🇮🇳 NSE Scanner ({len(nse_universe)} stocks)", 
-    f"🇺🇸 S&P 500 Scanner ({len(sp500_universe)} stocks)", 
+    f"🇮🇳 NSE Stocks ({len(nse_universe)})", 
+    f"🇺🇸 S&P 500 ({len(sp500_universe)})", 
     "📊 Scan History"
 ])
 
@@ -596,5 +479,177 @@ with tab1:
                 <p>{news['summary']}</p>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
                     <small>📅 {news['date']} | ⏰ {news['time']} | 📰 {news['source']}</small>
-                    <a href="{news['link']}" target="_blank" style="background-color: #1f77b4; color:
+                    <a href="{news['link']}" target="_blank" style="background-color: #1f77b4; color: white; padding: 5px 10px; text-decoration: none; border-radius: 3px; font-size: 12px;">Read Full</a>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+# Tab 2: NSE Stocks
+with tab2:
+    st.subheader(f"🇮🇳 NSE Complete Sector Scanner ({len(nse_universe)} stocks)")
+    
+    st.markdown("""
+    <div class="coverage-info">
+    <strong>📊 COMPLETE SECTOR COVERAGE:</strong><br>
+    🛡️ <strong>Defense:</strong> HAL, BEL, BDL, GRSE, MDL, BEML, BHEL<br>
+    🏗️ <strong>Infrastructure:</strong> L&T, IRB, HCC, NCC, JKCEMENT, RAMCOCEM<br>
+    🏭 <strong>Manufacturing:</strong> BHEL, SIEMENS, ABB, CUMMINSIND, HAVELLS<br>
+    🏥 <strong>Healthcare:</strong> Complete pharma + hospitals + diagnostics<br>
+    🏦 <strong>Banking:</strong> All PSU, private, NBFCs, housing finance<br>
+    ⚡ <strong>Energy:</strong> Oil, gas, power, renewables, transmission<br>
+    💻 <strong>Technology:</strong> IT services, software, digital, emerging tech<br>
+    🛒 <strong>Retail:</strong> DMART, organized retail, consumer brands, FMCG
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        min_price_in = st.number_input("Min Price (₹)", value=25, min_value=1, key="nse_min_price")
+    with col2:
+        max_rsi_in = st.number_input("Max RSI", value=35, min_value=1, max_value=100, key="nse_max_rsi")
+    with col3:
+        batch_size_nse = st.selectbox("Batch Size", [15, 20, 25, 30], index=1, key="nse_batch")
+    
+    if st.button("🔍 Scan Next NSE Batch (All Sectors)", type="primary"):
+        with st.spinner(f"Scanning batch {st.session_state.nse_batch_num + 1} across ALL sectors..."):
+            recommendations, next_batch = scan_rotating_batch(
+                nse_universe, min_price_in, max_rsi_in, "Indian", batch_size_nse, st.session_state.nse_batch_num
+            )
+            st.session_state.indian_recos = recommendations
+            st.session_state.nse_batch_num = next_batch
             
+            # Add to scan history
+            if not recommendations.empty:
+                scan_record = {
+                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'market': 'NSE',
+                    'batch': f"{st.session_state.nse_batch_num}/{((len(nse_universe) + batch_size_nse - 1) // batch_size_nse)}",
+                    'found': len(recommendations),
+                    'top_stock': recommendations.iloc[0]['Stock'] if len(recommendations) > 0 else 'None'
+                }
+                st.session_state.scan_history.append(scan_record)
+    
+    if not st.session_state.indian_recos.empty:
+        st.success(f"🎯 Found {len(st.session_state.indian_recos)} opportunities across multiple sectors!")
+        st.dataframe(st.session_state.indian_recos, use_container_width=True, height=300)
+        
+        csv = st.session_state.indian_recos.to_csv(index=False)
+        st.download_button(
+            "📥 Download NSE Recommendations",
+            csv,
+            f"nse_all_sectors_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+            "text/csv"
+        )
+    else:
+        st.info("🔍 Click 'Scan Next NSE Batch' to discover opportunities across all sectors!")
+
+# Tab 3: S&P 500 Stocks  
+with tab3:
+    st.subheader(f"🇺🇸 S&P 500 Complete Sector Scanner ({len(sp500_universe)} stocks)")
+    
+    st.markdown("""
+    <div class="coverage-info">
+    <strong>📊 COMPLETE S&P 500 SECTOR COVERAGE:</strong><br>
+    💻 <strong>Technology:</strong> FAANG + software + semiconductors + cybersecurity<br>
+    🏦 <strong>Financials:</strong> Banks + insurance + asset management + fintech<br>
+    🏥 <strong>Healthcare:</strong> Pharma + biotech + medical devices + services<br>
+    🛡️ <strong>Defense:</strong> BA, LMT, RTX, NOC, GD + aerospace contractors<br>
+    🏭 <strong>Industrials:</strong> Manufacturing + transportation + logistics<br>
+    ⚡ <strong>Energy:</strong> Oil majors + renewables + utilities + pipelines<br>
+    🛒 <strong>Consumer:</strong> Retail + brands + restaurants + apparel
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        min_price_us = st.number_input("Min Price ($)", value=25, min_value=1, key="sp500_min_price")
+    with col2:
+        max_rsi_us = st.number_input("Max RSI", value=35, min_value=1, max_value=100, key="sp500_max_rsi")
+    with col3:
+        batch_size_us = st.selectbox("Batch Size", [15, 20, 25, 30], index=1, key="sp500_batch")
+    
+    if st.button("🔍 Scan Next S&P 500 Batch (All Sectors)", type="primary"):
+        with st.spinner(f"Scanning batch {st.session_state.sp500_batch_num + 1} across ALL sectors..."):
+            recommendations, next_batch = scan_rotating_batch(
+                sp500_universe, min_price_us, max_rsi_us, "US", batch_size_us, st.session_state.sp500_batch_num
+            )
+            st.session_state.us_recos = recommendations
+            st.session_state.sp500_batch_num = next_batch
+            
+            # Add to scan history
+            if not recommendations.empty:
+                scan_record = {
+                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'market': 'S&P 500',
+                    'batch': f"{st.session_state.sp500_batch_num}/{((len(sp500_universe) + batch_size_us - 1) // batch_size_us)}",
+                    'found': len(recommendations),
+                    'top_stock': recommendations.iloc[0]['Stock'] if len(recommendations) > 0 else 'None'
+                }
+                st.session_state.scan_history.append(scan_record)
+    
+    if not st.session_state.us_recos.empty:
+        st.success(f"🎯 Found {len(st.session_state.us_recos)} S&P 500 opportunities across multiple sectors!")
+        st.dataframe(st.session_state.us_recos, use_container_width=True, height=300)
+        
+        csv = st.session_state.us_recos.to_csv(index=False)
+        st.download_button(
+            "📥 Download S&P 500 Recommendations",
+            csv,
+            f"sp500_all_sectors_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+            "text/csv"
+        )
+    else:
+        st.info("🔍 Click 'Scan Next S&P 500 Batch' to discover opportunities across all sectors!")
+
+# Tab 4: Scan History
+with tab4:
+    st.subheader("📊 Professional Scan History & Coverage Tracker")
+    
+    if st.session_state.scan_history:
+        history_df = pd.DataFrame(st.session_state.scan_history)
+        
+        st.markdown("""
+        <div class="opportunity-alert">
+        <strong>📈 Professional Usage Statistics</strong><br>
+        Track your complete market coverage and opportunity discovery across all scans
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Summary metrics
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total Scans", len(history_df))
+        with col2:
+            st.metric("Total Opportunities", history_df['found'].sum())
+        with col3:
+            st.metric("NSE Batches", len(history_df[history_df['market'] == 'NSE']))
+        with col4:
+            st.metric("S&P 500 Batches", len(history_df[history_df['market'] == 'S&P 500']))
+        
+        st.dataframe(history_df, use_container_width=True)
+        
+        if st.button("📥 Export Scan History"):
+            csv = history_df.to_csv(index=False)
+            st.download_button(
+                "Download History CSV",
+                csv,
+                f"scan_history_{datetime.now().strftime('%Y%m%d')}.csv",
+                "text/csv"
+            )
+        
+        if st.button("🗑️ Clear History"):
+            st.session_state.scan_history = []
+            st.success("Scan history cleared!")
+            st.rerun()
+    else:
+        st.info("No scan history yet. Start scanning to track your coverage!")
+
+# Footer
+st.markdown("---")
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.markdown("**📊 Professional Trading Dashboard**")
+with col2:
+    st.markdown(f"**🕐 Updated:** {datetime.now().strftime('%H:%M:%S')}")
+with col3:
+    st.markdown("**🎯 Complete Sector Coverage**")
