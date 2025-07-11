@@ -1,6 +1,6 @@
 
 import streamlit as st
-from news_logic import get_live_news
+from news_logic import get_latest_news
 from hybrid_stock_logic import get_indian_recos, get_us_recos
 
 st.set_page_config(page_title="Kamal's Trading Dashboard", layout="wide")
@@ -10,7 +10,7 @@ tabs = st.tabs(["📰 Live News Feed", "🇮🇳 Indian Stock Recommendations", 
 
 with tabs[0]:
     st.header("Live News Feed")
-    news_items = get_live_news()
+    news_items = get_latest_news()
     if news_items:
         for item in news_items:
             st.markdown(f"- [{item['title']}]({item['link']})")
