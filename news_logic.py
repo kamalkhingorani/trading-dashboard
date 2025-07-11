@@ -21,7 +21,7 @@ class NewsAnalyzer:
             ],
             'sector_specific': [
                 'banking', 'pharma', 'it', 'auto', 'steel', 'cement',
-                'energy', 'fmcg', 'telecom', 'real estate','defebse',,manufacturing',
+                'energy', 'fmcg', 'telecom', 'real estate','defense','manufacturing',
                  'infrastructure'
             ]
         }
