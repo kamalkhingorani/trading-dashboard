@@ -215,4 +215,174 @@ class USStockScanner:
                 'debt_to_equity': info.get('debtToEquity', 0),
                 'roe': info.get('returnOnEquity', 0),
                 'sector': info.get('sector', 'Unknown'),
-                'industry': info.get('industry', '
+                'industry': info.get('industry', 'Unknown'),
+                'beta': info.get('beta', 0),
+                'dividend_yield': info.get('dividendYield', 0)
+            }
+        except:
+            return {}
+    
+    def scan_us_stocks(self, min_price: float = 25, max_rsi: float = 35, 
+                      min_volume: float = 1000000, use_nasdaq: bool = False) -> pd.DataFrame:
+        """Main scanning function for US stocks"""
+        symbols_to_scan = self.nasdaq_symbols if use_nasdaq else self.sp500_symbols
+        recommendations = []
+        
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        # Limit scanning for performance
+        scan_limit = min(25, len(symbols_to_scan))
+        
+        for i, symbol in enumerate(symbols_to_scan[:scan_limit]):
+            try:
+                status_text.text(f"Scanning {symbol}... ({i+1}/{scan_limit})")
+                progress_bar.progress((i + 1) / scan_limit)
+                
+                # Download 6 months of data
+                stock = yf.Ticker(symbol)
+                data = stock.history(period="6mo", interval="1d")
+                
+                if data.empty or len(data) < 200:
+                    continue
+                
+                # Calculate technical indicators
+                data = self.calculate_us_technical_indicators(data)
+                
+                latest = data.iloc[-1]
+                current_price = latest['Close']
+                current_rsi = latest['RSI']
+                avg_volume = data['Volume'].tail(20).mean()
+                
+                # Apply basic filters
+                if (current_price >= min_price and 
+                    current_rsi <= max_rsi and 
+                    avg_volume >= min_volume and
+                    not pd.isna(current_rsi)):
+                    
+                    # Apply US market specific technical filters
+                    if (self.check_us_trend_alignment(data) and 
+                        self.check_us_breakout_pattern(data)):
+                        
+                        target, stop_loss = self.calculate_us_target_sl(current_price, data, symbol)
+                        gain_pct = ((target - current_price) / current_price) * 100
+                        days_estimate = self.estimate_us_market_days(current_price, target, data)
+                        
+                        # Get fundamental data
+                        fundamentals = self.get_us_fundamentals(symbol)
+                        
+                        # Generate remarks
+                        remarks = self.generate_us_remarks(data, fundamentals)
+                        
+                        recommendations.append({
+                            'Date': datetime.now().strftime('%Y-%m-%d'),
+                            'Stock': symbol,
+                            'LTP': round(current_price, 2),
+                            'RSI': round(current_rsi, 1),
+                            'Target': target,
+                            '% Gain': round(gain_pct, 1),
+                            'Est. Days': days_estimate,
+                            'Stop Loss': stop_loss,
+                            'Volume Ratio': round(latest['Volume_Ratio'], 2),
+                            'Sector': fundamentals.get('sector', 'Unknown'),
+                            'Beta': round(fundamentals.get('beta', 0), 2),
+                            'Remarks': remarks,
+                            'Status': 'Active'
+                        })
+                        
+            except Exception as e:
+                continue
+        
+        progress_bar.empty()
+        status_text.empty()
+        
+        # Sort by % Gain potential
+        df = pd.DataFrame(recommendations)
+        if not df.empty:
+            df = df.sort_values('% Gain', ascending=False)
+        
+        return df
+    
+    def generate_us_remarks(self, data: pd.DataFrame, fundamentals: Dict) -> str:
+        """Generate remarks for US stocks"""
+        latest = data.iloc[-1]
+        remarks = []
+        
+        # Technical remarks
+        if latest['Volume_Ratio'] > 2:
+            remarks.append("Volume surge")
+        elif latest['Volume_Ratio'] > 1.5:
+            remarks.append("High volume")
+        
+        if latest['MACD'] > latest['MACD_Signal']:
+            remarks.append("MACD bullish")
+        
+        if latest['BB_Position'] > 0.8:
+            remarks.append("BB breakout")
+        elif latest['BB_Position'] > 0.6:
+            remarks.append("Upper BB")
+        
+        if -30 <= latest['Williams_R'] <= -20:
+            remarks.append("Williams recovery")
+        
+        # Fundamental remarks
+        pe_ratio = fundamentals.get('pe_ratio', 0)
+        if pe_ratio and pe_ratio < 15:
+            remarks.append("Low PE")
+        elif pe_ratio and pe_ratio > 25:
+            remarks.append("Growth stock")
+        
+        beta = fundamentals.get('beta', 0)
+        if beta > 1.5:
+            remarks.append("High beta")
+        elif beta < 0.8:
+            remarks.append("Low beta")
+        
+        return " | ".join(remarks) if remarks else "Technical breakout"
+
+def get_us_recommendations(min_price: float = 25, max_rsi: float = 35, 
+                          min_volume: float = 1000000, use_nasdaq: bool = False) -> pd.DataFrame:
+    """Main function to get US stock recommendations"""
+    scanner = USStockScanner()
+    return scanner.scan_us_stocks(min_price, max_rsi, min_volume, use_nasdaq)
+
+def get_us_market_overview() -> Dict:
+    """Get US market overview data"""
+    try:
+        sp500 = yf.download("^GSPC", period="1d", interval="1m")
+        nasdaq = yf.download("^IXIC", period="1d", interval="1m")
+        dow = yf.download("^DJI", period="1d", interval="1m")
+        
+        result = {}
+        
+        if not sp500.empty:
+            sp500_latest = sp500.iloc[-1]
+            result.update({
+                'sp500_price': sp500_latest['Close'],
+                'sp500_change': sp500_latest['Close'] - sp500.iloc[0]['Open']
+            })
+        
+        if not nasdaq.empty:
+            nasdaq_latest = nasdaq.iloc[-1]
+            result.update({
+                'nasdaq_price': nasdaq_latest['Close'],
+                'nasdaq_change': nasdaq_latest['Close'] - nasdaq.iloc[0]['Open']
+            })
+        
+        if not dow.empty:
+            dow_latest = dow.iloc[-1]
+            result.update({
+                'dow_price': dow_latest['Close'],
+                'dow_change': dow_latest['Close'] - dow.iloc[0]['Open']
+            })
+        
+        result['last_updated'] = datetime.now().strftime('%H:%M:%S')
+        return result
+        
+    except:
+        return {
+            'sp500_price': 0, 'sp500_change': 0,
+            'nasdaq_price': 0, 'nasdaq_change': 0,
+            'dow_price': 0, 'dow_change': 0,
+            'last_updated': 'Error loading data'
+        }
