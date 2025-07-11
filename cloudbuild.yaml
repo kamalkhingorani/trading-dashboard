@@ -18,4 +18,5 @@ steps:
 
 images:
   - 'gcr.io/$PROJECT_ID/kamal-dashboard
-  
+
+
