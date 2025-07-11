@@ -1,11 +1,64 @@
 import requests
+from datetime import datetime, timedelta
+import pandas as pd
+from typing import List, Dict
+import streamlit as st
+import feedparser
+import re
 
-def get_latest_news():
-    url = "https://newsapi.org/v2/top-headlines"
-    params = {
-        "apiKey": "1ceb6cfbbbc54ed9b39bc27801c9b04c",
-        "country": "in",
-        "pageSize": 10
-    }
-    resp = requests.get(url, params=params).json()
-    return [{"title": a["title"], "link": a["url"]} for a in resp.get("articles", [])]
+class NewsAnalyzer:
+    def __init__(self):
+        self.market_keywords = {
+            'high_impact': [
+                'interest rate', 'rbi policy', 'budget', 'gdp', 'inflation',
+                'repo rate', 'reverse repo', 'fiscal deficit', 'war', 'pandemic',
+                'lockdown', 'vaccine', 'election', 'government policy'
+            ],
+            'medium_impact': [
+                'corporate earnings', 'ipo', 'merger', 'acquisition', 'dividend',
+                'bonus', 'split', 'fii', 'dii', 'foreign investment',
+                'crude oil', 'currency', 'rupee', 'dollar'
+            ],
+            'sector_specific': [
+                'banking', 'pharma', 'it', 'auto', 'steel', 'cement',
+                'energy', 'fmcg', 'telecom', 'real estate','defebse',,manufacturing',
+                 'infrastructure'
+            ]
+        }
+        
+        self.news_sources = {
+            'economic_times': 'https://economictimes.indiatimes.com/rssfeedstopstories.cms',
+            'business_standard': 'https://www.business-standard.com/rss/markets-106.rss',
+            'moneycontrol': 'https://www.moneycontrol.com/rss/business.xml',
+            'livemint': 'https://www.livemint.com/rss/money',
+            'financial_express': 'https://www.financialexpress.com/market/rss'
+        }
+    
+    def fetch_rss_news(self, url: str, source: str) -> List[Dict]:
+        """Fetch news from RSS feeds"""
+        try:
+            feed = feedparser.parse(url)
+            news_items = []
+            
+            for entry in feed.entries[:10]:  # Limit to 10 items per source
+                news_items.append({
+                    'title': entry.get('title', ''),
+                    'summary': entry.get('summary', entry.get('description', ''))[:300],
+                    'link': entry.get('link', ''),
+                    'published': entry.get('published', ''),
+                    'source': source
+                })
+            
+            return news_items
+        except Exception as e:
+            st.warning(f"Error fetching from {source}: {str(e)}")
+            return []
+    
+    def analyze_market_impact(self, title: str, summary: str) -> Tuple[str, str]:
+        """Analyze the potential market impact of news"""
+        text = (title + " " + summary).lower()
+        
+        # Check for high impact keywords
+        for keyword in self.market_keywords['high_impact']:
+            if keyword in text:
+                return
