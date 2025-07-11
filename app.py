@@ -276,4 +276,4 @@ with tab2:
         st.write("")  # Spacer
     
     if st.button("🔍 Scan Indian Stocks", key="scan_indian") or refresh_all:
-          with st:
+       with st:
