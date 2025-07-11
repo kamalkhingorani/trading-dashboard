@@ -1,7 +1,8 @@
 
 import streamlit as st
 from news_logic import get_latest_news
-from hybrid_stock_logic import get_indian_recos, get_us_recos
+from indian_stock_logic import get_indian_recos
+from us_stock_logic import get_us_recos
 
 st.set_page_config(page_title="Kamal's Trading Dashboard", layout="wide")
 st.title("📊 Kamal's Trading Dashboard")
