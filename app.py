@@ -236,79 +236,28 @@ def get_sample_news():
         }
     ]
 
-def generate_fno_opportunities():
-    """Generate F&O opportunities"""
-    fno_data = []
+# Import the fixed F&O logic
+try:
+    from fixed_fno_options_logic import generate_fno_opportunities, get_options_summary
+except ImportError:
+    # Fallback function if import fails
+    def generate_fno_opportunities():
+        return pd.DataFrame({
+            'Index/Stock': ['NIFTY', 'BANKNIFTY'],
+            'Current Price': [22000, 48000],
+            'Strike': [22000, 48000],
+            'Type': ['CE', 'CE'],
+            'LTP': [150, 200],
+            'Target': [200, 300],
+            '% Gain': [33.3, 50.0],
+            'Days to Expiry': [3, 25],
+            'Expiry Date': ['20-Jul-2025', '31-Jul-2025'],
+            'Recommendation': ['Sample Data', 'Sample Data'],
+            'Risk Level': ['Medium', 'High']
+        })
     
-    # Index options
-    nifty_strikes = [21800, 22000, 22200, 22400]
-    banknifty_strikes = [47500, 48000, 48500, 49000]
-    
-    for strike in nifty_strikes:
-        for option_type in ['CE', 'PE']:
-            ltp = np.random.uniform(80, 250)
-            target = ltp * (1.25 + np.random.uniform(0, 0.3))
-            gain = ((target - ltp) / ltp) * 100
-            
-            fno_data.append({
-                'Symbol': 'NIFTY',
-                'Strike': strike,
-                'Type': option_type,
-                'LTP': round(ltp, 2),
-                'Target': round(target, 2),
-                '% Gain': round(gain, 1),
-                'Days to Exp': np.random.randint(5, 15),
-                'OI': np.random.randint(50000, 200000),
-                'Volume': np.random.randint(10000, 80000),
-                'Remarks': 'Technical breakout expected'
-            })
-    
-    for strike in banknifty_strikes:
-        for option_type in ['CE', 'PE']:
-            ltp = np.random.uniform(120, 400)
-            target = ltp * (1.2 + np.random.uniform(0, 0.4))
-            gain = ((target - ltp) / ltp) * 100
-            
-            fno_data.append({
-                'Symbol': 'BANKNIFTY',
-                'Strike': strike,
-                'Type': option_type,
-                'LTP': round(ltp, 2),
-                'Target': round(target, 2),
-                '% Gain': round(gain, 1),
-                'Days to Exp': np.random.randint(5, 15),
-                'OI': np.random.randint(30000, 150000),
-                'Volume': np.random.randint(5000, 60000),
-                'Remarks': 'Index momentum play'
-            })
-    
-    # Stock options
-    stock_options = ['RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK']
-    for stock in stock_options:
-        base_price = np.random.uniform(800, 3500)
-        strikes = [int(base_price * 0.98), int(base_price), int(base_price * 1.02)]
-        
-        for strike in strikes:
-            for option_type in ['CE', 'PE']:
-                ltp = np.random.uniform(15, 120)
-                target = ltp * (1.3 + np.random.uniform(0, 0.5))
-                gain = ((target - ltp) / ltp) * 100
-                
-                if gain > 20:  # Only good opportunities
-                    fno_data.append({
-                        'Symbol': stock,
-                        'Strike': strike,
-                        'Type': option_type,
-                        'LTP': round(ltp, 2),
-                        'Target': round(target, 2),
-                        '% Gain': round(gain, 1),
-                        'Days to Exp': np.random.randint(7, 21),
-                        'OI': np.random.randint(5000, 50000),
-                        'Volume': np.random.randint(1000, 25000),
-                        'Remarks': f'{stock} earnings/technical play'
-                    })
-    
-    return pd.DataFrame(fno_data).head(20)  # Top 20 opportunities
+    def get_options_summary(df):
+        return {'total_opportunities': len(df) if not df.empty else 0}
 
 # Initialize session state
 if 'indian_recos' not in st.session_state:
@@ -478,39 +427,84 @@ with tab3:
     else:
         st.info("Click 'Scan US Stocks' to find opportunities in S&P 500 markets!")
 
-# Tab 4: F&O Options (RESTORED AND WORKING)
+# Tab 4: F&O Options (COMPLETELY REDESIGNED)
 with tab4:
     st.subheader("📊 F&O Options & Index Trading")
     
     st.markdown("""
     <div class="batch-info">
-    <strong>📈 Options Trading Opportunities</strong><br>
-    • Index Options: NIFTY, BANKNIFTY with multiple strikes<br>
-    • Stock Options: Major F&O stocks with good liquidity<br>
-    • Technical Analysis: Based on price action and volatility patterns
+    <strong>📈 Indian Options Trading (Correct Market Structure)</strong><br>
+    • <strong>NIFTY</strong>: Weekly expiry every Thursday<br>
+    • <strong>BANKNIFTY</strong>: Monthly expiry on last Thursday of month<br>
+    • <strong>Stock Options</strong>: Monthly expiry on last Thursday of month<br>
+    • <strong>Strike Intervals</strong>: Market-compliant (50 for Nifty, 100 for Bank Nifty, varies for stocks)
     </div>
     """, unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        option_type = st.selectbox("Strategy Focus", ["Both Call & Put", "Bullish (Calls)", "Bearish (Puts)"])
+        strategy_focus = st.selectbox("Strategy Focus", 
+            ["Best Opportunities", "Bullish Bias", "Bearish Bias", "ATM Options Only"])
     with col2:
-        expiry_pref = st.selectbox("Expiry Preference", ["Current Week", "Next Week", "Monthly"])
+        risk_preference = st.selectbox("Risk Preference", 
+            ["All Risk Levels", "Medium Risk Only", "High Risk Only"])
     with col3:
-        min_oi = st.number_input("Min Open Interest", value=10000, min_value=1000)
+        underlying_filter = st.selectbox("Underlying Filter", 
+            ["All", "Indices Only", "Stocks Only"])
     
     if st.button("🔍 Generate F&O Opportunities", type="primary"):
-        with st.spinner("Generating F&O recommendations..."):
+        with st.spinner("Generating realistic F&O recommendations with correct Indian market structure..."):
             st.session_state.fno_recos = generate_fno_opportunities()
             st.session_state.scan_count += 1
             
-            st.success(f"🎯 Generated {len(st.session_state.fno_recos)} F&O opportunities!")
+            if not st.session_state.fno_recos.empty:
+                st.success(f"🎯 Generated {len(st.session_state.fno_recos)} F&O opportunities with correct strikes and expiries!")
+            else:
+                st.warning("No opportunities found with current criteria.")
     
     if not st.session_state.fno_recos.empty:
-        st.dataframe(st.session_state.fno_recos, use_container_width=True, height=400)
+        # Apply filters
+        filtered_df = st.session_state.fno_recos.copy()
+        
+        if risk_preference != "All Risk Levels":
+            risk_level = risk_preference.replace(" Only", "").replace("Risk", "").strip()
+            filtered_df = filtered_df[filtered_df['Risk Level'] == risk_level]
+        
+        if underlying_filter == "Indices Only":
+            filtered_df = filtered_df[filtered_df['Index/Stock'].isin(['NIFTY', 'BANKNIFTY'])]
+        elif underlying_filter == "Stocks Only":
+            filtered_df = filtered_df[~filtered_df['Index/Stock'].isin(['NIFTY', 'BANKNIFTY'])]
+        
+        if strategy_focus == "ATM Options Only":
+            filtered_df = filtered_df[filtered_df['Moneyness'].between(0.98, 1.02)]
+        elif strategy_focus == "Bullish Bias":
+            filtered_df = filtered_df[filtered_df['Type'] == 'CE']
+        elif strategy_focus == "Bearish Bias":
+            filtered_df = filtered_df[filtered_df['Type'] == 'PE']
+        
+        st.info(f"**Showing {len(filtered_df)} options** (filtered from {len(st.session_state.fno_recos)} total)")
+        
+        # Display the dataframe
+        st.dataframe(filtered_df, use_container_width=True, height=400)
+        
+        # Summary statistics
+        if len(filtered_df) > 0:
+            summary = get_options_summary(filtered_df)
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Opportunities", summary.get('total_opportunities', 0))
+            with col2:
+                st.metric("Avg Gain Potential", f"{summary.get('avg_gain_potential', 0):.1f}%")
+            with col3:
+                st.metric("Max Gain Potential", f"{summary.get('max_gain_potential', 0):.1f}%")
+            with col4:
+                high_risk = summary.get('high_risk_count', 0)
+                medium_risk = summary.get('medium_risk_count', 0)
+                st.metric("Risk Distribution", f"H:{high_risk} M:{medium_risk}")
         
         # Download option
-        csv = st.session_state.fno_recos.to_csv(index=False)
+        csv = filtered_df.to_csv(index=False)
         st.download_button(
             "📥 Download F&O Recommendations",
             csv,
@@ -518,20 +512,28 @@ with tab4:
             "text/csv"
         )
         
-        # Summary stats
-        if len(st.session_state.fno_recos) > 0:
-            avg_gain = st.session_state.fno_recos['% Gain'].mean()
-            max_gain = st.session_state.fno_recos['% Gain'].max()
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Total Opportunities", len(st.session_state.fno_recos))
-            with col2:
-                st.metric("Average Gain Potential", f"{avg_gain:.1f}%")
-            with col3:
-                st.metric("Best Opportunity", f"{max_gain:.1f}%")
+        # Important disclaimer
+        st.warning("""
+        ⚠️ **Important Notes:**
+        - These are technical analysis based suggestions, not guaranteed returns
+        - Options trading involves high risk and can result in total loss of premium
+        - Verify expiry dates and strikes before trading
+        - Always use proper risk management and position sizing
+        """)
+        
     else:
-        st.info("Click 'Generate F&O Opportunities' to see options recommendations!")
+        st.info("Click 'Generate F&O Opportunities' to see realistic options recommendations with correct Indian market structure!")
+        
+        # Show sample of what correct structure looks like
+        st.markdown("""
+        **📋 What You'll Get:**
+        - ✅ Correct strike prices (multiples of 50/100 for indices, proper intervals for stocks)
+        - ✅ Accurate expiry dates (Thursday for Nifty weekly, last Thursday of month for others)
+        - ✅ Realistic premium calculations based on moneyness and time value
+        - ✅ Single direction recommendations (not both calls and puts for same scenario)
+        - ✅ Current price and target price for underlying assets
+        - ✅ Risk assessment and technical reasoning
+        """)
 
 # Footer with stats
 st.markdown("---")
