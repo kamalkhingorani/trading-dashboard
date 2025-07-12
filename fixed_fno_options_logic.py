@@ -53,7 +53,7 @@ def get_next_expiry_dates():
         'stocks': next_stock_expiry
     }
 
-def get_correct_strike_prices(underlying_price, option_type='index'):
+def get_correct_strike_prices(underlying_price, option_type='index', num_strikes=5):
     """Get correct strike prices based on Indian market rules"""
     
     if option_type == 'index':
@@ -81,7 +81,8 @@ def get_correct_strike_prices(underlying_price, option_type='index'):
     atm_strike = round(underlying_price / interval) * interval
     
     strikes = []
-    for i in range(-4, 5):  # 4 strikes below and above ATM
+    # For directional recommendations, focus on ATM and slightly OTM strikes
+    for i in range(-1, num_strikes):
         strike = atm_strike + (i * interval)
         if strike > 0:
             strikes.append(strike)
@@ -89,37 +90,67 @@ def get_correct_strike_prices(underlying_price, option_type='index'):
     return strikes
 
 def fetch_current_index_prices():
-    """Fetch current prices of indices"""
+    """Fetch current prices of indices with technical indicators"""
     try:
-        # Fetch current Nifty price
+        # Fetch current Nifty price with history
         nifty = yf.Ticker("^NSEI")
-        nifty_data = nifty.history(period="1d")
-        nifty_price = nifty_data['Close'].iloc[-1] if not nifty_data.empty else 22000
+        nifty_data = nifty.history(period="1mo")
+        if not nifty_data.empty:
+            nifty_price = nifty_data['Close'].iloc[-1]
+            nifty_sma20 = nifty_data['Close'].tail(20).mean()
+            nifty_trend = "BULLISH" if nifty_price > nifty_sma20 else "BEARISH"
+        else:
+            nifty_price = 22000.0
+            nifty_trend = "NEUTRAL"
         
-        # Fetch current Bank Nifty price  
+        # Fetch current Bank Nifty price with history
         banknifty = yf.Ticker("^NSEBANK")
-        banknifty_data = banknifty.history(period="1d")
-        banknifty_price = banknifty_data['Close'].iloc[-1] if not banknifty_data.empty else 48000
+        banknifty_data = banknifty.history(period="1mo")
+        if not banknifty_data.empty:
+            banknifty_price = banknifty_data['Close'].iloc[-1]
+            banknifty_sma20 = banknifty_data['Close'].tail(20).mean()
+            banknifty_trend = "BULLISH" if banknifty_price > banknifty_sma20 else "BEARISH"
+        else:
+            banknifty_price = 48000.0
+            banknifty_trend = "NEUTRAL"
         
         return {
-            'NIFTY': round(nifty_price, 2),
-            'BANKNIFTY': round(banknifty_price, 2)
+            'NIFTY': {
+                'price': round(nifty_price, 2),
+                'trend': nifty_trend
+            },
+            'BANKNIFTY': {
+                'price': round(banknifty_price, 2),
+                'trend': banknifty_trend
+            }
         }
     except:
         return {
-            'NIFTY': 22000.0,
-            'BANKNIFTY': 48000.0
+            'NIFTY': {'price': 22000.0, 'trend': 'NEUTRAL'},
+            'BANKNIFTY': {'price': 48000.0, 'trend': 'NEUTRAL'}
         }
 
 def fetch_stock_prices(symbols):
-    """Fetch current prices of stocks"""
+    """Fetch current prices of stocks with technical bias"""
     prices = {}
     for symbol in symbols:
         try:
             stock = yf.Ticker(f"{symbol}.NS")
-            data = stock.history(period="1d")
+            data = stock.history(period="1mo")
             if not data.empty:
-                prices[symbol] = round(data['Close'].iloc[-1], 2)
+                current_price = round(data['Close'].iloc[-1], 2)
+                sma20 = data['Close'].tail(20).mean()
+                trend = "BULLISH" if current_price > sma20 else "BEARISH"
+                
+                # Calculate momentum
+                price_5d_ago = data['Close'].iloc[-6] if len(data) >= 6 else current_price
+                momentum = (current_price - price_5d_ago) / price_5d_ago
+                
+                prices[symbol] = {
+                    'price': current_price,
+                    'trend': trend,
+                    'momentum': momentum
+                }
             else:
                 # Default prices if data unavailable
                 default_prices = {
@@ -129,14 +160,22 @@ def fetch_stock_prices(symbols):
                     'INFY': 1400,
                     'ICICIBANK': 950
                 }
-                prices[symbol] = default_prices.get(symbol, 1000)
+                prices[symbol] = {
+                    'price': default_prices.get(symbol, 1000),
+                    'trend': 'NEUTRAL',
+                    'momentum': 0
+                }
         except:
-            prices[symbol] = 1000
+            prices[symbol] = {
+                'price': 1000,
+                'trend': 'NEUTRAL',
+                'momentum': 0
+            }
     
     return prices
 
-def calculate_option_targets(underlying_price, strike, option_type, expiry_days, underlying_name):
-    """Calculate realistic option price targets"""
+def calculate_option_targets(underlying_price, strike, option_type, expiry_days, underlying_name, trend):
+    """Calculate realistic option price targets based on directional bias"""
     
     # Moneyness calculation
     if option_type == 'CE':
@@ -167,22 +206,32 @@ def calculate_option_targets(underlying_price, strike, option_type, expiry_days,
     current_premium = intrinsic + time_premium
     current_premium = max(current_premium, 5)  # Minimum premium of 5
     
-    # Target calculation based on expected move
+    # Target calculation based on expected move and trend
     if underlying_name in ['NIFTY', 'BANKNIFTY']:
-        expected_move_pct = np.random.uniform(0.02, 0.06)  # 2-6% move for indices
-    else:
-        expected_move_pct = np.random.uniform(0.03, 0.08)  # 3-8% move for stocks
+        if trend == "BULLISH" and option_type == "CE":
+            expected_move_pct = np.random.uniform(0.03, 0.08)  # 3-8% bullish move
+        elif trend == "BEARISH" and option_type == "PE":
+            expected_move_pct = np.random.uniform(0.03, 0.08)  # 3-8% bearish move
+        else:
+            expected_move_pct = np.random.uniform(0.01, 0.04)  # Smaller move against trend
+    else:  # Stocks
+        if (trend == "BULLISH" and option_type == "CE") or (trend == "BEARISH" and option_type == "PE"):
+            expected_move_pct = np.random.uniform(0.04, 0.10)  # 4-10% directional move
+        else:
+            expected_move_pct = np.random.uniform(0.02, 0.05)  # Smaller move against trend
     
-    # Direction based on option type and moneyness
-    if (option_type == 'CE' and moneyness < 1.02) or (option_type == 'PE' and moneyness < 1.02):
-        # ATM or slightly OTM options
-        target_multiplier = 1.5 + np.random.uniform(0, 1.0)  # 1.5x to 2.5x
-    elif is_itm:
-        # ITM options
-        target_multiplier = 1.2 + np.random.uniform(0, 0.5)  # 1.2x to 1.7x
+    # Target multiplier based on moneyness and trend alignment
+    if (option_type == 'CE' and trend == 'BULLISH') or (option_type == 'PE' and trend == 'BEARISH'):
+        # Trend-aligned options
+        if abs(moneyness - 1) < 0.02:  # ATM options
+            target_multiplier = 1.8 + np.random.uniform(0, 0.7)  # 1.8x to 2.5x
+        elif is_itm:  # ITM options
+            target_multiplier = 1.3 + np.random.uniform(0, 0.4)  # 1.3x to 1.7x
+        else:  # OTM options
+            target_multiplier = 2.2 + np.random.uniform(0, 1.3)  # 2.2x to 3.5x
     else:
-        # Far OTM options
-        target_multiplier = 2.0 + np.random.uniform(0, 2.0)  # 2x to 4x
+        # Against-trend options (lower potential)
+        target_multiplier = 1.1 + np.random.uniform(0, 0.3)  # 1.1x to 1.4x
     
     target_premium = current_premium * target_multiplier
     gain_pct = ((target_premium - current_premium) / current_premium) * 100
@@ -192,119 +241,132 @@ def calculate_option_targets(underlying_price, strike, option_type, expiry_days,
         'target_premium': round(target_premium, 2),
         'gain_pct': round(gain_pct, 1),
         'moneyness': round(moneyness, 3),
-        'is_itm': is_itm
+        'is_itm': is_itm,
+        'trend_aligned': (option_type == 'CE' and trend == 'BULLISH') or (option_type == 'PE' and trend == 'BEARISH')
     }
 
 def generate_fno_opportunities():
-    """Generate realistic F&O opportunities with correct Indian market structure"""
+    """Generate realistic F&O opportunities with single directional bias"""
     
     # Get current prices and expiry dates
     expiry_dates = get_next_expiry_dates()
-    index_prices = fetch_current_index_prices()
+    index_data = fetch_current_index_prices()
     
     # Stock symbols for F&O
     fno_stocks = ['RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK']
-    stock_prices = fetch_stock_prices(fno_stocks)
+    stock_data = fetch_stock_prices(fno_stocks)
     
     recommendations = []
     
-    # NIFTY Options (Weekly expiry)
-    nifty_price = index_prices['NIFTY']
-    nifty_strikes = get_correct_strike_prices(nifty_price, 'index')
+    # NIFTY Options (Weekly expiry) - Single direction based on trend
+    nifty_price = index_data['NIFTY']['price']
+    nifty_trend = index_data['NIFTY']['trend']
+    nifty_strikes = get_correct_strike_prices(nifty_price, 'index', num_strikes=3)
     nifty_expiry_days = (expiry_dates['nifty'] - datetime.now()).days
     
-    # Only show best NIFTY opportunities (not all strikes)
-    best_nifty_strikes = nifty_strikes[2:7]  # 5 strikes around ATM
+    # Choose option type based on trend
+    nifty_option_type = 'CE' if nifty_trend == 'BULLISH' else 'PE'
     
-    for strike in best_nifty_strikes:
-        for option_type in ['CE', 'PE']:
-            option_data = calculate_option_targets(
-                nifty_price, strike, option_type, nifty_expiry_days, 'NIFTY'
-            )
+    for strike in nifty_strikes:
+        option_data = calculate_option_targets(
+            nifty_price, strike, nifty_option_type, nifty_expiry_days, 'NIFTY', nifty_trend
+        )
+        
+        # Only include high-probability opportunities
+        if option_data['trend_aligned'] and 20 <= option_data['gain_pct'] <= 150:
             
-            # Only include opportunities with reasonable gain potential
-            if 15 <= option_data['gain_pct'] <= 200:
-                
-                # Determine recommendation based on technical bias
-                if option_type == 'CE' and strike <= nifty_price * 1.02:  # Bullish bias for near ATM calls
-                    recommendation = 'BUY - Bullish Setup'
-                elif option_type == 'PE' and strike >= nifty_price * 0.98:  # Bearish bias for near ATM puts
-                    recommendation = 'BUY - Bearish Setup'
-                else:
-                    recommendation = 'MONITOR - Directional Play'
-                
-                recommendations.append({
-                    'Index/Stock': 'NIFTY',
-                    'Current Price': nifty_price,
-                    'Strike': int(strike),
-                    'Type': option_type,
-                    'LTP': option_data['current_premium'],
-                    'Target': option_data['target_premium'],
-                    '% Gain': option_data['gain_pct'],
-                    'Days to Expiry': nifty_expiry_days,
-                    'Expiry Date': expiry_dates['nifty'].strftime('%d-%b-%Y'),
-                    'Moneyness': option_data['moneyness'],
-                    'Recommendation': recommendation,
-                    'Risk Level': 'Medium' if abs(option_data['moneyness'] - 1) < 0.03 else 'High'
-                })
+            if nifty_option_type == 'CE':
+                strategy = f"Bullish on NIFTY (above {nifty_price:.0f})"
+                recommendation = 'BUY CE - Uptrend Play'
+            else:
+                strategy = f"Bearish on NIFTY (below {nifty_price:.0f})"
+                recommendation = 'BUY PE - Downtrend Play'
+            
+            recommendations.append({
+                'Index/Stock': 'NIFTY',
+                'Current Price': nifty_price,
+                'Strike': int(strike),
+                'Type': nifty_option_type,
+                'LTP': option_data['current_premium'],
+                'Target': option_data['target_premium'],
+                '% Gain': option_data['gain_pct'],
+                'Days to Expiry': nifty_expiry_days,
+                'Expiry Date': expiry_dates['nifty'].strftime('%d-%b-%Y'),
+                'Moneyness': 'ATM' if abs(option_data['moneyness'] - 1) < 0.02 else ('ITM' if option_data['is_itm'] else 'OTM'),
+                'Strategy': strategy,
+                'Recommendation': recommendation,
+                'Risk Level': 'Medium' if abs(option_data['moneyness'] - 1) < 0.03 else 'High'
+            })
     
-    # BANK NIFTY Options (Monthly expiry)
-    banknifty_price = index_prices['BANKNIFTY']
-    banknifty_strikes = get_correct_strike_prices(banknifty_price, 'index')
+    # BANK NIFTY Options (Monthly expiry) - Single direction based on trend
+    banknifty_price = index_data['BANKNIFTY']['price']
+    banknifty_trend = index_data['BANKNIFTY']['trend']
+    banknifty_strikes = get_correct_strike_prices(banknifty_price, 'index', num_strikes=3)
     banknifty_expiry_days = (expiry_dates['banknifty'] - datetime.now()).days
     
-    # Only show best BANK NIFTY opportunities
-    best_banknifty_strikes = banknifty_strikes[2:7]  # 5 strikes around ATM
+    # Choose option type based on trend
+    banknifty_option_type = 'CE' if banknifty_trend == 'BULLISH' else 'PE'
     
-    for strike in best_banknifty_strikes:
-        for option_type in ['CE', 'PE']:
-            option_data = calculate_option_targets(
-                banknifty_price, strike, option_type, banknifty_expiry_days, 'BANKNIFTY'
-            )
+    for strike in banknifty_strikes:
+        option_data = calculate_option_targets(
+            banknifty_price, strike, banknifty_option_type, banknifty_expiry_days, 'BANKNIFTY', banknifty_trend
+        )
+        
+        if option_data['trend_aligned'] and 20 <= option_data['gain_pct'] <= 150:
             
-            if 15 <= option_data['gain_pct'] <= 200:
-                
-                if option_type == 'CE' and strike <= banknifty_price * 1.02:
-                    recommendation = 'BUY - Banking Sector Bullish'
-                elif option_type == 'PE' and strike >= banknifty_price * 0.98:
-                    recommendation = 'BUY - Banking Sector Bearish'
-                else:
-                    recommendation = 'MONITOR - Sector Play'
-                
-                recommendations.append({
-                    'Index/Stock': 'BANKNIFTY',
-                    'Current Price': banknifty_price,
-                    'Strike': int(strike),
-                    'Type': option_type,
-                    'LTP': option_data['current_premium'],
-                    'Target': option_data['target_premium'],
-                    '% Gain': option_data['gain_pct'],
-                    'Days to Expiry': banknifty_expiry_days,
-                    'Expiry Date': expiry_dates['banknifty'].strftime('%d-%b-%Y'),
-                    'Moneyness': option_data['moneyness'],
-                    'Recommendation': recommendation,
-                    'Risk Level': 'High'  # Bank Nifty is more volatile
-                })
+            if banknifty_option_type == 'CE':
+                strategy = f"Banking sector bullish (above {banknifty_price:.0f})"
+                recommendation = 'BUY CE - Banking Rally'
+            else:
+                strategy = f"Banking sector bearish (below {banknifty_price:.0f})"
+                recommendation = 'BUY PE - Banking Weakness'
+            
+            recommendations.append({
+                'Index/Stock': 'BANKNIFTY',
+                'Current Price': banknifty_price,
+                'Strike': int(strike),
+                'Type': banknifty_option_type,
+                'LTP': option_data['current_premium'],
+                'Target': option_data['target_premium'],
+                '% Gain': option_data['gain_pct'],
+                'Days to Expiry': banknifty_expiry_days,
+                'Expiry Date': expiry_dates['banknifty'].strftime('%d-%b-%Y'),
+                'Moneyness': 'ATM' if abs(option_data['moneyness'] - 1) < 0.02 else ('ITM' if option_data['is_itm'] else 'OTM'),
+                'Strategy': strategy,
+                'Recommendation': recommendation,
+                'Risk Level': 'High'  # Bank Nifty is more volatile
+            })
     
-    # Stock Options (Monthly expiry)
+    # Stock Options (Monthly expiry) - Single direction per stock
     stock_expiry_days = (expiry_dates['stocks'] - datetime.now()).days
     
     for stock in fno_stocks[:3]:  # Limit to top 3 stocks for memory
-        stock_price = stock_prices[stock]
-        stock_strikes = get_correct_strike_prices(stock_price, 'stock')
+        stock_info = stock_data[stock]
+        stock_price = stock_info['price']
+        stock_trend = stock_info['trend']
+        stock_momentum = stock_info['momentum']
         
-        # Only show 3 best strikes per stock
-        best_stock_strikes = stock_strikes[3:6]  # 3 strikes around ATM
+        # Determine direction based on trend and momentum
+        if stock_trend == 'BULLISH' and stock_momentum > 0.01:
+            option_type = 'CE'
+            strategy = f"{stock} bullish momentum play"
+            recommendation = f'BUY CE - {stock} Upside'
+        elif stock_trend == 'BEARISH' and stock_momentum < -0.01:
+            option_type = 'PE'
+            strategy = f"{stock} bearish breakdown"
+            recommendation = f'BUY PE - {stock} Downside'
+        else:
+            # Skip stocks with unclear direction
+            continue
         
-        for strike in best_stock_strikes:
-            # Only show one option type per stock (based on technical bias)
-            option_type = 'CE'  # Default to calls for simplicity
-            
+        stock_strikes = get_correct_strike_prices(stock_price, 'stock', num_strikes=2)
+        
+        for strike in stock_strikes:
             option_data = calculate_option_targets(
-                stock_price, strike, option_type, stock_expiry_days, stock
+                stock_price, strike, option_type, stock_expiry_days, stock, stock_trend
             )
             
-            if 20 <= option_data['gain_pct'] <= 150:
+            if option_data['trend_aligned'] and 25 <= option_data['gain_pct'] <= 120:
                 
                 recommendations.append({
                     'Index/Stock': stock,
@@ -316,15 +378,19 @@ def generate_fno_opportunities():
                     '% Gain': option_data['gain_pct'],
                     'Days to Expiry': stock_expiry_days,
                     'Expiry Date': expiry_dates['stocks'].strftime('%d-%b-%Y'),
-                    'Moneyness': option_data['moneyness'],
-                    'Recommendation': f'{stock} Earnings/Technical Play',
+                    'Moneyness': 'ATM' if abs(option_data['moneyness'] - 1) < 0.02 else ('ITM' if option_data['is_itm'] else 'OTM'),
+                    'Strategy': strategy,
+                    'Recommendation': recommendation,
                     'Risk Level': 'High'
                 })
     
     # Convert to DataFrame and sort by gain potential
     df = pd.DataFrame(recommendations)
     if not df.empty:
-        df = df.sort_values(['Risk Level', '% Gain'], ascending=[True, False])
+        # Sort by Risk Level (Medium first) and then by % Gain
+        df['risk_sort'] = df['Risk Level'].map({'Medium': 0, 'High': 1})
+        df = df.sort_values(['risk_sort', '% Gain'], ascending=[True, False])
+        df = df.drop('risk_sort', axis=1)
     
     return df
 
@@ -333,15 +399,27 @@ def get_options_summary(df):
     if df.empty:
         return {}
     
+    # Count by option type
+    ce_count = len(df[df['Type'] == 'CE'])
+    pe_count = len(df[df['Type'] == 'PE'])
+    
+    # Group by underlying
+    underlying_counts = df['Index/Stock'].value_counts().to_dict()
+    
     return {
         'total_opportunities': len(df),
         'avg_gain_potential': df['% Gain'].mean(),
         'max_gain_potential': df['% Gain'].max(),
-        'nifty_options': len(df[df['Index/Stock'] == 'NIFTY']),
-        'banknifty_options': len(df[df['Index/Stock'] == 'BANKNIFTY']),
+        'min_gain_potential': df['% Gain'].min(),
+        'ce_count': ce_count,
+        'pe_count': pe_count,
+        'nifty_options': underlying_counts.get('NIFTY', 0),
+        'banknifty_options': underlying_counts.get('BANKNIFTY', 0),
         'stock_options': len(df[~df['Index/Stock'].isin(['NIFTY', 'BANKNIFTY'])]),
         'high_risk_count': len(df[df['Risk Level'] == 'High']),
-        'medium_risk_count': len(df[df['Risk Level'] == 'Medium'])
+        'medium_risk_count': len(df[df['Risk Level'] == 'Medium']),
+        'bullish_bias': ce_count > pe_count,
+        'market_view': 'Bullish' if ce_count > pe_count else 'Bearish' if pe_count > ce_count else 'Neutral'
     }
 
 def validate_option_data(df):
