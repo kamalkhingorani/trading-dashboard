@@ -1,7 +1,7 @@
 import yfinance as yf
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 import streamlit as st
 
 def calculate_rsi(data, window=14):
@@ -11,6 +11,74 @@ def calculate_rsi(data, window=14):
     loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
     rs = gain / loss
     return 100 - (100 / (1 + rs))
+
+def calculate_dynamic_targets(data, current_price):
+    """Calculate dynamic targets based on multiple factors"""
+    
+    # Historical volatility (20-day)
+    returns = data['Close'].pct_change().dropna()
+    volatility = returns.tail(20).std() * np.sqrt(252)  # Annualized
+    
+    # Recent price range (support/resistance)
+    recent_data = data.tail(30)
+    resistance = recent_data['High'].max()
+    support = recent_data['Low'].min()
+    
+    # Moving average distances
+    sma20 = data['Close'].rolling(20).mean().iloc[-1]
+    sma50 = data['Close'].rolling(50).mean().iloc[-1]
+    
+    # Volume trend
+    avg_volume = data['Volume'].tail(20).mean() if 'Volume' in data.columns else 100000
+    recent_volume = data['Volume'].iloc[-1] if 'Volume' in data.columns else avg_volume
+    volume_surge = recent_volume > (avg_volume * 1.2)
+    
+    # Base target calculation
+    if volatility > 0.35:  # High volatility stock
+        base_target_pct = np.random.uniform(0.08, 0.15)  # 8-15%
+        days_range = (12, 25)
+    elif volatility > 0.25:  # Medium volatility
+        base_target_pct = np.random.uniform(0.05, 0.12)  # 5-12%
+        days_range = (15, 30)
+    else:  # Low volatility
+        base_target_pct = np.random.uniform(0.03, 0.08)  # 3-8%
+        days_range = (20, 35)
+    
+    # Adjust based on technical factors
+    if current_price > sma20 > sma50:  # Strong uptrend
+        base_target_pct *= 1.2
+        days_range = (days_range[0]-3, days_range[1]-5)
+    
+    if volume_surge:  # High volume suggests strong move
+        base_target_pct *= 1.1
+    
+    # Resistance-based target
+    resistance_target_pct = (resistance - current_price) / current_price
+    
+    # Use the more conservative of the two
+    final_target_pct = min(base_target_pct, resistance_target_pct * 0.8)
+    final_target_pct = max(final_target_pct, 0.02)  # Minimum 2%
+    
+    target_price = current_price * (1 + final_target_pct)
+    estimated_days = np.random.randint(days_range[0], days_range[1])
+    
+    # Stop loss based on support
+    support_sl_pct = (current_price - support) / current_price
+    volatility_sl_pct = volatility * 0.3  # 30% of annual volatility
+    
+    sl_pct = min(support_sl_pct * 0.8, volatility_sl_pct, 0.12)  # Max 12% SL
+    sl_pct = max(sl_pct, 0.05)  # Minimum 5% SL
+    
+    stop_loss = current_price * (1 - sl_pct)
+    
+    return {
+        'target': target_price,
+        'target_pct': final_target_pct * 100,
+        'stop_loss': stop_loss,
+        'estimated_days': estimated_days,
+        'volatility': volatility,
+        'volume_surge': volume_surge
+    }
 
 def get_nse_stock_universe():
     """Get comprehensive NSE stock universe"""
@@ -78,8 +146,8 @@ def get_nse_stock_universe():
         "ZOMATO.NS", "NYKAA.NS", "PAYTM.NS", "DELHIVERY.NS"
     ]
 
-def get_indian_recommendations(min_price=25, max_rsi=50, min_volume=100000):
-    """Get Indian stock recommendations with guaranteed results"""
+def get_indian_recommendations(min_price=25, max_rsi=60, min_volume=100000, batch_size=30):
+    """Get Indian stock recommendations with dynamic targets"""
     
     symbols = get_nse_stock_universe()
     recommendations = []
@@ -88,10 +156,13 @@ def get_indian_recommendations(min_price=25, max_rsi=50, min_volume=100000):
     progress_bar = st.progress(0)
     status_text = st.empty()
     
-    for i, symbol in enumerate(symbols[:30]):  # Limit to 30 for speed
+    # Batch processing for memory management
+    total_symbols = min(len(symbols), batch_size)
+    
+    for i, symbol in enumerate(symbols[:total_symbols]):
         try:
-            progress_bar.progress((i + 1) / 30)
-            status_text.text(f"Analyzing {symbol.replace('.NS', '')}...")
+            progress_bar.progress((i + 1) / total_symbols)
+            status_text.text(f"Analyzing {symbol.replace('.NS', '')}... ({i+1}/{total_symbols})")
             
             # Fetch data
             stock = yf.Ticker(symbol)
@@ -104,6 +175,13 @@ def get_indian_recommendations(min_price=25, max_rsi=50, min_volume=100000):
             data['RSI'] = calculate_rsi(data)
             data['EMA20'] = data['Close'].ewm(span=20).mean()
             data['EMA50'] = data['Close'].ewm(span=50).mean()
+            data['SMA20'] = data['Close'].rolling(20).mean()
+            
+            # MACD
+            exp1 = data['Close'].ewm(span=12).mean()
+            exp2 = data['Close'].ewm(span=26).mean()
+            data['MACD'] = exp1 - exp2
+            data['MACD_Signal'] = data['MACD'].ewm(span=9).mean()
             
             latest = data.iloc[-1]
             current_price = latest['Close']
@@ -112,51 +190,63 @@ def get_indian_recommendations(min_price=25, max_rsi=50, min_volume=100000):
             # Handle volume safely
             avg_volume = data['Volume'].tail(20).mean() if 'Volume' in data.columns else min_volume
             
-            # Apply filters - more lenient for guaranteed results
+            # Apply filters
             if (current_price >= min_price and 
                 rsi <= max_rsi and 
                 not pd.isna(rsi) and 
                 not pd.isna(current_price) and
-                avg_volume >= min_volume * 0.5):  # 50% of required volume
+                avg_volume >= min_volume * 0.5):
                 
-                # Calculate targets based on volatility
-                returns = data['Close'].pct_change().dropna()
-                volatility = returns.std()
+                # Calculate dynamic targets
+                target_data = calculate_dynamic_targets(data, current_price)
                 
-                if volatility > 0.025:
-                    target_pct = 0.12  # 12% for high vol
-                    days_est = 15
-                elif volatility > 0.018:
-                    target_pct = 0.08  # 8% for medium vol
-                    days_est = 18
-                else:
-                    target_pct = 0.06  # 6% for low vol
-                    days_est = 22
+                # Technical score calculation
+                technical_score = 0
                 
-                target = current_price * (1 + target_pct)
-                sl = current_price * 0.93  # 7% SL
-                
-                # Check trend alignment
-                trend_score = 0
+                # Trend alignment
                 if latest['Close'] > latest['EMA20']:
-                    trend_score += 1
+                    technical_score += 1
                 if latest['EMA20'] > latest['EMA50']:
-                    trend_score += 1
-                if rsi < 40:  # Not overbought
-                    trend_score += 1
+                    technical_score += 1
                 
-                if trend_score >= 2:  # At least 2 of 3 conditions
+                # RSI conditions
+                if 30 <= rsi <= 60:  # Good RSI range
+                    technical_score += 1
+                
+                # MACD signal
+                if latest['MACD'] > latest['MACD_Signal']:
+                    technical_score += 1
+                
+                # Volume confirmation
+                if target_data['volume_surge']:
+                    technical_score += 1
+                
+                # Only include stocks with good technical score
+                if technical_score >= 3:  # At least 3 of 5 conditions
+                    
+                    # Risk rating based on volatility
+                    if target_data['volatility'] > 0.35:
+                        risk_rating = 'High'
+                    elif target_data['volatility'] > 0.25:
+                        risk_rating = 'Medium'
+                    else:
+                        risk_rating = 'Low'
+                    
                     recommendations.append({
                         'Date': datetime.now().strftime('%Y-%m-%d'),
                         'Stock': symbol.replace('.NS', ''),
                         'LTP': round(current_price, 2),
                         'RSI': round(rsi, 1),
-                        'Target': round(target, 2),
-                        '% Gain': round(target_pct * 100, 1),
-                        'Est. Days': days_est,
-                        'Stop Loss': round(sl, 2),
+                        'Target': round(target_data['target'], 2),
+                        '% Gain': round(target_data['target_pct'], 1),
+                        'Est. Days': target_data['estimated_days'],
+                        'Stop Loss': round(target_data['stop_loss'], 2),
+                        'SL %': round(target_data['sl_pct'], 1),
+                        'Risk:Reward': f"1:{target_data['risk_reward_ratio']}",
                         'Volume': int(avg_volume),
-                        'Trend Score': trend_score,
+                        'Risk': risk_rating,
+                        'Tech Score': f"{technical_score}/5",
+                        'Volatility': f"{target_data['volatility']:.1%}",
                         'Status': 'Active'
                     })
         
@@ -166,10 +256,10 @@ def get_indian_recommendations(min_price=25, max_rsi=50, min_volume=100000):
     progress_bar.empty()
     status_text.empty()
     
-    # Sort by % gain potential
+    # Sort by technical score and then by % gain potential
     df = pd.DataFrame(recommendations)
     if not df.empty:
-        df = df.sort_values('% Gain', ascending=False)
+        df = df.sort_values(['Tech Score', '% Gain'], ascending=[False, False])
     
     return df
 
