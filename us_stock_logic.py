@@ -12,6 +12,107 @@ def calculate_rsi(data, window=14):
     rs = gain / loss
     return 100 - (100 / (1 + rs))
 
+def calculate_dynamic_targets(data, current_price, market='US'):
+    """Calculate dynamic targets based on multiple factors with proper risk management"""
+    
+    # Historical volatility (20-day)
+    returns = data['Close'].pct_change().dropna()
+    volatility = returns.tail(20).std() * np.sqrt(252)  # Annualized
+    
+    # Recent price range (support/resistance)
+    recent_data = data.tail(30)
+    resistance = recent_data['High'].max()
+    support = recent_data['Low'].min()
+    
+    # Moving average distances
+    sma20 = data['Close'].rolling(20).mean().iloc[-1]
+    sma50 = data['Close'].rolling(50).mean().iloc[-1]
+    
+    # Volume trend
+    avg_volume = data['Volume'].tail(20).mean() if 'Volume' in data.columns else 1000000
+    recent_volume = data['Volume'].iloc[-1] if 'Volume' in data.columns else avg_volume
+    volume_surge = recent_volume > (avg_volume * 1.2)
+    
+    # US market specific adjustments (more efficient markets)
+    if current_price > 200:  # Large cap stocks
+        base_range = (0.02, 0.08)  # 2-8% for large caps
+        days_range = (10, 20)
+    elif current_price > 50:  # Mid cap stocks
+        base_range = (0.03, 0.10)  # 3-10% for mid caps
+        days_range = (12, 25)
+    else:  # Small cap stocks
+        base_range = (0.05, 0.15)  # 5-15% for small caps
+        days_range = (15, 30)
+    
+    # Volatility-based adjustments
+    if volatility > 0.35:  # High volatility
+        base_target_pct = np.random.uniform(base_range[1]*0.7, base_range[1])
+        days_range = (days_range[0], days_range[0]+8)
+    elif volatility > 0.25:  # Medium volatility
+        base_target_pct = np.random.uniform(base_range[0]*1.5, base_range[1]*0.8)
+        days_range = (days_range[0]+2, days_range[1])
+    else:  # Low volatility
+        base_target_pct = np.random.uniform(base_range[0], base_range[0]*2.5)
+        days_range = (days_range[0]+3, days_range[1]+5)
+    
+    # Technical factor adjustments
+    if current_price > sma20 > sma50:  # Strong uptrend
+        base_target_pct *= 1.15  # More conservative than Indian markets
+        days_range = (days_range[0]-1, days_range[1]-2)
+    
+    if volume_surge:  # High volume confirmation
+        base_target_pct *= 1.08
+    
+    # Resistance-based ceiling
+    resistance_target_pct = (resistance - current_price) / current_price
+    
+    # Use more conservative target
+    final_target_pct = min(base_target_pct, resistance_target_pct * 0.85)
+    final_target_pct = max(final_target_pct, base_range[0]/2)  # Minimum target
+    
+    target_price = current_price * (1 + final_target_pct)
+    estimated_days = np.random.randint(days_range[0], days_range[1])
+    
+    # CORRECTED: Stop loss calculation with proper risk management
+    # Rule: SL should never exceed potential gain, ideally be 50% or less
+    potential_gain = target_price - current_price
+    
+    # Calculate multiple SL options
+    support_sl_pct = (current_price - support) / current_price
+    volatility_sl_pct = volatility * 0.2  # 20% of annual volatility for US
+    
+    # Conservative SL based on potential gain (Risk:Reward = 1:2 or better)
+    max_allowed_sl_pct = final_target_pct * 0.5  # SL = 50% of potential gain
+    
+    # Choose the most conservative (smallest) stop loss
+    sl_pct = min(
+        support_sl_pct * 0.75,
+        volatility_sl_pct,
+        max_allowed_sl_pct,
+        0.06  # Max 6% SL for US markets
+    )
+    
+    # Minimum SL to avoid very tight stops
+    sl_pct = max(sl_pct, 0.015)  # Minimum 1.5% SL for US
+    
+    stop_loss = current_price * (1 - sl_pct)
+    
+    # Calculate actual risk-reward ratio
+    actual_gain = potential_gain
+    actual_risk = current_price - stop_loss
+    risk_reward_ratio = actual_gain / actual_risk if actual_risk > 0 else 999
+    
+    return {
+        'target': target_price,
+        'target_pct': final_target_pct * 100,
+        'stop_loss': stop_loss,
+        'sl_pct': sl_pct * 100,
+        'estimated_days': estimated_days,
+        'volatility': volatility,
+        'volume_surge': volume_surge,
+        'risk_reward_ratio': round(risk_reward_ratio, 2)
+    }
+
 def get_sp500_universe():
     """Get comprehensive S&P 500 stock universe"""
     return [
@@ -57,8 +158,8 @@ def get_sp500_universe():
         "AMT", "PLD", "EQIX", "SPG", "O", "PSA", "EQR", "AVB", "ARE", "DLR"
     ]
 
-def get_us_recommendations(min_price=25, max_rsi=50, min_volume=1000000):
-    """Get US stock recommendations with guaranteed results"""
+def get_us_recommendations(min_price=25, max_rsi=60, min_volume=1000000, batch_size=30):
+    """Get US stock recommendations with dynamic targets"""
     
     symbols = get_sp500_universe()
     recommendations = []
@@ -67,10 +168,13 @@ def get_us_recommendations(min_price=25, max_rsi=50, min_volume=1000000):
     progress_bar = st.progress(0)
     status_text = st.empty()
     
-    for i, symbol in enumerate(symbols[:30]):  # Limit to 30 for speed
+    # Batch processing for memory management
+    total_symbols = min(len(symbols), batch_size)
+    
+    for i, symbol in enumerate(symbols[:total_symbols]):
         try:
-            progress_bar.progress((i + 1) / 30)
-            status_text.text(f"Analyzing {symbol}...")
+            progress_bar.progress((i + 1) / total_symbols)
+            status_text.text(f"Analyzing {symbol}... ({i+1}/{total_symbols})")
             
             # Fetch data
             stock = yf.Ticker(symbol)
@@ -83,12 +187,19 @@ def get_us_recommendations(min_price=25, max_rsi=50, min_volume=1000000):
             data['RSI'] = calculate_rsi(data)
             data['EMA21'] = data['Close'].ewm(span=21).mean()
             data['EMA50'] = data['Close'].ewm(span=50).mean()
+            data['SMA20'] = data['Close'].rolling(20).mean()
             
             # MACD
             exp1 = data['Close'].ewm(span=12).mean()
             exp2 = data['Close'].ewm(span=26).mean()
             data['MACD'] = exp1 - exp2
             data['MACD_Signal'] = data['MACD'].ewm(span=9).mean()
+            
+            # Bollinger Bands
+            data['BB_Middle'] = data['Close'].rolling(20).mean()
+            bb_std = data['Close'].rolling(20).std()
+            data['BB_Upper'] = data['BB_Middle'] + (bb_std * 2)
+            data['BB_Lower'] = data['BB_Middle'] - (bb_std * 2)
             
             latest = data.iloc[-1]
             current_price = latest['Close']
@@ -97,58 +208,73 @@ def get_us_recommendations(min_price=25, max_rsi=50, min_volume=1000000):
             # Handle volume safely
             avg_volume = data['Volume'].tail(20).mean() if 'Volume' in data.columns else min_volume
             
-            # Apply filters - more lenient for guaranteed results
+            # Apply filters (more selective for US markets)
             if (current_price >= min_price and 
                 rsi <= max_rsi and 
                 not pd.isna(rsi) and 
                 not pd.isna(current_price) and
                 avg_volume >= min_volume * 0.3):  # 30% of required volume
                 
-                # Calculate targets based on market cap and volatility
-                returns = data['Close'].pct_change().dropna()
-                volatility = returns.std()
+                # Calculate dynamic targets
+                target_data = calculate_dynamic_targets(data, current_price, 'US')
                 
-                # US market targets (generally more conservative)
-                if current_price > 200:  # Large cap
-                    target_pct = 0.06  # 6% for large caps
-                    days_est = 15
-                elif volatility > 0.025:
-                    target_pct = 0.10  # 10% for high vol
-                    days_est = 12
-                elif volatility > 0.018:
-                    target_pct = 0.07  # 7% for medium vol
-                    days_est = 15
-                else:
-                    target_pct = 0.05  # 5% for low vol
-                    days_est = 20
-                
-                target = current_price * (1 + target_pct)
-                sl = current_price * 0.94  # 6% SL for US markets
-                
-                # Check technical conditions
+                # Technical score calculation (more stringent for US)
                 technical_score = 0
+                
+                # Trend alignment
                 if latest['Close'] > latest['EMA21']:
                     technical_score += 1
                 if latest['EMA21'] > latest['EMA50']:
                     technical_score += 1
-                if latest['MACD'] > latest['MACD_Signal']:
-                    technical_score += 1
-                if rsi < 45:  # Not overbought
+                
+                # RSI conditions (US markets prefer different ranges)
+                if 25 <= rsi <= 55:  # Good RSI range for US stocks
                     technical_score += 1
                 
-                if technical_score >= 2:  # At least 2 of 4 conditions
+                # MACD bullish signal
+                if latest['MACD'] > latest['MACD_Signal']:
+                    technical_score += 1
+                
+                # Bollinger Band position (near lower band is good for entry)
+                bb_position = (latest['Close'] - latest['BB_Lower']) / (latest['BB_Upper'] - latest['BB_Lower'])
+                if 0.2 <= bb_position <= 0.6:  # Not at extremes
+                    technical_score += 1
+                
+                # Volume confirmation
+                if target_data['volume_surge']:
+                    technical_score += 1
+                
+                # Only include stocks with strong technical score (higher bar for US)
+                if technical_score >= 4:  # At least 4 of 6 conditions
+                    
+                    # Risk rating based on volatility and market cap
+                    if current_price > 200 and target_data['volatility'] < 0.25:
+                        risk_rating = 'Low'
+                    elif target_data['volatility'] > 0.35:
+                        risk_rating = 'High'
+                    else:
+                        risk_rating = 'Medium'
+                    
+                    # Sector classification
+                    sector = get_stock_sector(symbol)
+                    
                     recommendations.append({
                         'Date': datetime.now().strftime('%Y-%m-%d'),
                         'Stock': symbol,
                         'LTP': round(current_price, 2),
                         'RSI': round(rsi, 1),
-                        'Target': round(target, 2),
-                        '% Gain': round(target_pct * 100, 1),
-                        'Est. Days': days_est,
-                        'Stop Loss': round(sl, 2),
+                        'Target': round(target_data['target'], 2),
+                        '% Gain': round(target_data['target_pct'], 1),
+                        'Est. Days': target_data['estimated_days'],
+                        'Stop Loss': round(target_data['stop_loss'], 2),
+                        'SL %': round(target_data['sl_pct'], 1),
+                        'Risk:Reward': f"1:{target_data['risk_reward_ratio']}",
                         'Volume': int(avg_volume),
-                        'Tech Score': technical_score,
-                        'MACD Signal': 'Bullish' if latest['MACD'] > latest['MACD_Signal'] else 'Bearish',
+                        'Risk': risk_rating,
+                        'Tech Score': f"{technical_score}/6",
+                        'Sector': sector,
+                        'Volatility': f"{target_data['volatility']:.1%}",
+                        'BB Position': f"{bb_position:.2f}",
                         'Status': 'Active'
                     })
         
@@ -158,12 +284,62 @@ def get_us_recommendations(min_price=25, max_rsi=50, min_volume=1000000):
     progress_bar.empty()
     status_text.empty()
     
-    # Sort by % gain potential
+    # Sort by technical score and then by % gain potential
     df = pd.DataFrame(recommendations)
     if not df.empty:
-        df = df.sort_values('% Gain', ascending=False)
+        df = df.sort_values(['Tech Score', '% Gain'], ascending=[False, False])
     
     return df
+
+def get_stock_sector(symbol):
+    """Get sector for US stock symbol"""
+    sector_mapping = {
+        'AAPL': 'Technology', 'MSFT': 'Technology', 'GOOGL': 'Technology', 'AMZN': 'Technology',
+        'TSLA': 'Technology', 'META': 'Technology', 'NVDA': 'Technology', 'NFLX': 'Technology',
+        'ADBE': 'Technology', 'CRM': 'Technology', 'ORCL': 'Technology', 'INTC': 'Technology',
+        'AMD': 'Technology', 'QCOM': 'Technology', 'AVGO': 'Technology', 'CSCO': 'Technology',
+        'IBM': 'Technology', 'INTU': 'Technology', 'NOW': 'Technology', 'WDAY': 'Technology',
+        
+        'JPM': 'Financial', 'BAC': 'Financial', 'WFC': 'Financial', 'GS': 'Financial',
+        'MS': 'Financial', 'C': 'Financial', 'V': 'Financial', 'MA': 'Financial',
+        'AXP': 'Financial', 'PYPL': 'Financial', 'BK': 'Financial', 'USB': 'Financial',
+        'PNC': 'Financial', 'COF': 'Financial', 'SCHW': 'Financial', 'BLK': 'Financial',
+        
+        'JNJ': 'Healthcare', 'PFE': 'Healthcare', 'UNH': 'Healthcare', 'ABBV': 'Healthcare',
+        'TMO': 'Healthcare', 'ABT': 'Healthcare', 'MDT': 'Healthcare', 'BMY': 'Healthcare',
+        'AMGN': 'Healthcare', 'GILD': 'Healthcare', 'REGN': 'Healthcare', 'BSX': 'Healthcare',
+        'SYK': 'Healthcare', 'ISRG': 'Healthcare', 'ZBH': 'Healthcare', 'BDX': 'Healthcare',
+        
+        'BA': 'Defense', 'LMT': 'Defense', 'RTX': 'Defense', 'NOC': 'Defense', 'GD': 'Defense',
+        'LHX': 'Defense', 'LDOS': 'Defense', 'HII': 'Defense', 'TDG': 'Defense', 'CW': 'Defense',
+        
+        'XOM': 'Energy', 'CVX': 'Energy', 'COP': 'Energy', 'EOG': 'Energy', 'SLB': 'Energy',
+        'MPC': 'Energy', 'VLO': 'Energy', 'PSX': 'Energy', 'OXY': 'Energy', 'HAL': 'Energy',
+        
+        'WMT': 'Consumer', 'HD': 'Consumer', 'LOW': 'Consumer', 'COST': 'Consumer', 'TGT': 'Consumer',
+        'PG': 'Consumer', 'KO': 'Consumer', 'PEP': 'Consumer', 'MCD': 'Consumer', 'SBUX': 'Consumer',
+        'NKE': 'Consumer', 'TJX': 'Consumer', 'ROST': 'Consumer', 'YUM': 'Consumer', 'CMG': 'Consumer',
+        
+        'CAT': 'Industrial', 'GE': 'Industrial', 'MMM': 'Industrial', 'HON': 'Industrial', 'UPS': 'Industrial',
+        'FDX': 'Industrial', 'EMR': 'Industrial', 'ETN': 'Industrial', 'ITW': 'Industrial', 'PH': 'Industrial',
+        'CMI': 'Industrial', 'DE': 'Industrial', 'DOV': 'Industrial', 'ROK': 'Industrial', 'CARR': 'Industrial',
+        
+        'NEE': 'Utilities', 'DUK': 'Utilities', 'SO': 'Utilities', 'AEP': 'Utilities', 'EXC': 'Utilities',
+        'XEL': 'Utilities', 'WEC': 'Utilities', 'ES': 'Utilities', 'AWK': 'Utilities', 'CMS': 'Utilities',
+        
+        'LIN': 'Materials', 'APD': 'Materials', 'ECL': 'Materials', 'SHW': 'Materials', 'FCX': 'Materials',
+        'NEM': 'Materials', 'FMC': 'Materials', 'ALB': 'Materials', 'EMN': 'Materials', 'IFF': 'Materials',
+        
+        'VZ': 'Communication', 'T': 'Communication', 'TMUS': 'Communication', 'CMCSA': 'Communication',
+        'CHTR': 'Communication', 'FOXA': 'Communication', 'FOX': 'Communication', 'NWSA': 'Communication',
+        
+        'DAL': 'Transportation', 'UAL': 'Transportation', 'AAL': 'Transportation', 'LUV': 'Transportation',
+        'NSC': 'Transportation', 'CSX': 'Transportation', 'UNP': 'Transportation', 'EXPD': 'Transportation',
+        
+        'AMT': 'Real Estate', 'PLD': 'Real Estate', 'EQIX': 'Real Estate', 'SPG': 'Real Estate',
+        'O': 'Real Estate', 'PSA': 'Real Estate', 'EQR': 'Real Estate', 'AVB': 'Real Estate'
+    }
+    return sector_mapping.get(symbol, 'Others')
 
 def get_us_market_overview():
     """Get US market overview"""
@@ -227,28 +403,15 @@ def get_sector_analysis_us(recommendations_df):
     if recommendations_df.empty:
         return {}
     
-    sector_mapping = {
-        'AAPL': 'Technology', 'MSFT': 'Technology', 'GOOGL': 'Technology', 'AMZN': 'Technology',
-        'TSLA': 'Technology', 'META': 'Technology', 'NVDA': 'Technology', 'NFLX': 'Technology',
-        'JPM': 'Financial', 'BAC': 'Financial', 'WFC': 'Financial', 'GS': 'Financial',
-        'MS': 'Financial', 'C': 'Financial', 'V': 'Financial', 'MA': 'Financial',
-        'JNJ': 'Healthcare', 'PFE': 'Healthcare', 'UNH': 'Healthcare', 'ABBV': 'Healthcare',
-        'TMO': 'Healthcare', 'ABT': 'Healthcare', 'MDT': 'Healthcare', 'BMY': 'Healthcare',
-        'BA': 'Defense', 'LMT': 'Defense', 'RTX': 'Defense', 'NOC': 'Defense', 'GD': 'Defense',
-        'XOM': 'Energy', 'CVX': 'Energy', 'COP': 'Energy', 'EOG': 'Energy', 'SLB': 'Energy',
-        'WMT': 'Consumer', 'HD': 'Consumer', 'LOW': 'Consumer', 'COST': 'Consumer', 'TGT': 'Consumer',
-        'CAT': 'Industrial', 'GE': 'Industrial', 'MMM': 'Industrial', 'HON': 'Industrial', 'UPS': 'Industrial'
-    }
-    
     sector_counts = {}
     for _, row in recommendations_df.iterrows():
-        sector = sector_mapping.get(row['Stock'], 'Others')
+        sector = row.get('Sector', 'Others')
         sector_counts[sector] = sector_counts.get(sector, 0) + 1
     
     return sector_counts
 
 def get_market_sentiment():
-    """Get market sentiment based on technical indicators"""
+    """Get market sentiment based on VIX and technical indicators"""
     try:
         # Fetch VIX for market fear gauge
         vix = yf.download("^VIX", period="5d")
