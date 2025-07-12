@@ -33,74 +33,97 @@ def calculate_dynamic_targets(data, current_price, market='US'):
     recent_volume = data['Volume'].iloc[-1] if 'Volume' in data.columns else avg_volume
     volume_surge = recent_volume > (avg_volume * 1.2)
     
-    # US market specific adjustments (more efficient markets)
+    # Trend strength
+    price_above_sma20 = current_price > sma20
+    sma20_above_sma50 = sma20 > sma50
+    uptrend = price_above_sma20 and sma20_above_sma50
+    
+    # US market specific adjustments (more efficient markets, tighter ranges)
     if current_price > 200:  # Large cap stocks
-        base_range = (0.02, 0.08)  # 2-8% for large caps
+        base_range = (0.02, 0.06)  # 2-6% for large caps
         days_range = (10, 20)
     elif current_price > 50:  # Mid cap stocks
-        base_range = (0.03, 0.10)  # 3-10% for mid caps
+        base_range = (0.03, 0.08)  # 3-8% for mid caps
         days_range = (12, 25)
     else:  # Small cap stocks
-        base_range = (0.05, 0.15)  # 5-15% for small caps
+        base_range = (0.04, 0.10)  # 4-10% for small caps
         days_range = (15, 30)
     
-    # Volatility-based adjustments
+    # Volatility-based adjustments with randomness
+    random_vol_factor = np.random.uniform(0.9, 1.1)
     if volatility > 0.35:  # High volatility
-        base_target_pct = np.random.uniform(base_range[1]*0.7, base_range[1])
-        days_range = (days_range[0], days_range[0]+8)
+        base_target_pct = np.random.uniform(base_range[1]*0.7, base_range[1]) * random_vol_factor
+        days_adjust = np.random.randint(-2, 3)
+        days_range = (days_range[0] + days_adjust, days_range[0] + days_adjust + 8)
     elif volatility > 0.25:  # Medium volatility
-        base_target_pct = np.random.uniform(base_range[0]*1.5, base_range[1]*0.8)
-        days_range = (days_range[0]+2, days_range[1])
+        base_target_pct = np.random.uniform(base_range[0]*1.5, base_range[1]*0.8) * random_vol_factor
+        days_adjust = np.random.randint(0, 3)
+        days_range = (days_range[0] + days_adjust, days_range[1])
     else:  # Low volatility
-        base_target_pct = np.random.uniform(base_range[0], base_range[0]*2.5)
-        days_range = (days_range[0]+3, days_range[1]+5)
+        base_target_pct = np.random.uniform(base_range[0], base_range[0]*2.5) * random_vol_factor
+        days_adjust = np.random.randint(2, 5)
+        days_range = (days_range[0] + days_adjust, days_range[1] + days_adjust)
     
-    # Technical factor adjustments
-    if current_price > sma20 > sma50:  # Strong uptrend
-        base_target_pct *= 1.15  # More conservative than Indian markets
+    # Technical factor adjustments with some randomness
+    tech_factor = 1.0
+    if uptrend:
+        tech_factor *= np.random.uniform(1.1, 1.2)  # 10-20% boost
         days_range = (days_range[0]-1, days_range[1]-2)
     
-    if volume_surge:  # High volume confirmation
-        base_target_pct *= 1.08
+    if volume_surge:
+        tech_factor *= np.random.uniform(1.05, 1.1)  # 5-10% boost
+    
+    # Recent momentum
+    momentum_5d = (current_price - data['Close'].iloc[-6]) / data['Close'].iloc[-6]
+    if momentum_5d > 0.02:  # Positive momentum
+        tech_factor *= np.random.uniform(1.02, 1.08)
+    elif momentum_5d < -0.02:  # Negative momentum
+        tech_factor *= np.random.uniform(0.92, 0.98)
+    
+    base_target_pct *= tech_factor
     
     # Resistance-based ceiling
-    resistance_target_pct = (resistance - current_price) / current_price
+    resistance_room = (resistance - current_price) / current_price
+    if resistance_room < base_target_pct:
+        base_target_pct = resistance_room * 0.85  # Leave room before resistance
     
-    # Use more conservative target
-    final_target_pct = min(base_target_pct, resistance_target_pct * 0.85)
-    final_target_pct = max(final_target_pct, base_range[0]/2)  # Minimum target
+    # Final target with bounds
+    final_target_pct = max(base_target_pct, 0.015)  # Minimum 1.5%
+    final_target_pct = min(final_target_pct, 0.12)   # Maximum 12%
     
     target_price = current_price * (1 + final_target_pct)
     estimated_days = np.random.randint(days_range[0], days_range[1])
     
-    # CORRECTED: Stop loss calculation with proper risk management
-    # Rule: SL should never exceed potential gain, ideally be 50% or less
-    potential_gain = target_price - current_price
+    # CORRECTED STOP LOSS CALCULATION
+    # Calculate multiple stop loss options
+    support_based_sl = (current_price - support) / current_price
+    volatility_based_sl = volatility * 0.12  # 12% of annual volatility for US
+    atr_based_sl = returns.tail(14).std() * 1.5  # 1.5x ATR
     
-    # Calculate multiple SL options
-    support_sl_pct = (current_price - support) / current_price
-    volatility_sl_pct = volatility * 0.2  # 20% of annual volatility for US
+    # Risk management rule: Stop loss should be maximum 50% of target gain
+    max_allowed_sl_pct = final_target_pct * 0.5  # 50% of potential gain
     
-    # Conservative SL based on potential gain (Risk:Reward = 1:2 or better)
-    max_allowed_sl_pct = final_target_pct * 0.5  # SL = 50% of potential gain
-    
-    # Choose the most conservative (smallest) stop loss
+    # Choose the most appropriate stop loss
     sl_pct = min(
-        support_sl_pct * 0.75,
-        volatility_sl_pct,
-        max_allowed_sl_pct,
-        0.06  # Max 6% SL for US markets
+        support_based_sl * 0.75,  # 75% of distance to support
+        volatility_based_sl,
+        atr_based_sl,
+        max_allowed_sl_pct,       # Never exceed 50% of gain
+        0.06                      # Maximum 6% stop loss for US
     )
     
-    # Minimum SL to avoid very tight stops
-    sl_pct = max(sl_pct, 0.015)  # Minimum 1.5% SL for US
+    # Ensure minimum stop loss (not too tight)
+    sl_pct = max(sl_pct, 0.015)  # Minimum 1.5% stop loss for US
+    
+    # Add some market-specific randomness
+    sl_pct *= np.random.uniform(0.95, 1.05)
     
     stop_loss = current_price * (1 - sl_pct)
     
     # Calculate actual risk-reward ratio
-    actual_gain = potential_gain
-    actual_risk = current_price - stop_loss
-    risk_reward_ratio = actual_gain / actual_risk if actual_risk > 0 else 999
+    potential_gain = target_price - current_price
+    potential_loss = current_price - stop_loss
+    risk_reward_ratio = potential_gain / potential_loss if potential_loss > 0 else 999
     
     return {
         'target': target_price,
@@ -110,7 +133,9 @@ def calculate_dynamic_targets(data, current_price, market='US'):
         'estimated_days': estimated_days,
         'volatility': volatility,
         'volume_surge': volume_surge,
-        'risk_reward_ratio': round(risk_reward_ratio, 2)
+        'risk_reward_ratio': round(risk_reward_ratio, 2),
+        'uptrend': uptrend,
+        'momentum_5d': momentum_5d
     }
 
 def get_sp500_universe():
@@ -208,136 +233,175 @@ def get_us_recommendations(min_price=25, max_rsi=60, min_volume=1000000, batch_s
             # Handle volume safely
             avg_volume = data['Volume'].tail(20).mean() if 'Volume' in data.columns else min_volume
             
-            # Apply filters (more selective for US markets)
+            # Apply filters
             if (current_price >= min_price and 
                 rsi <= max_rsi and 
                 not pd.isna(rsi) and 
                 not pd.isna(current_price) and
-                avg_volume >= min_volume * 0.3):  # 30% of required volume
+                avg_volume >= min_volume * 0.3):
                 
                 # Calculate dynamic targets
                 target_data = calculate_dynamic_targets(data, current_price, 'US')
                 
-                # Technical score calculation (more stringent for US)
-                technical_score = 0
-                
-                # Trend alignment
-                if latest['Close'] > latest['EMA21']:
-                    technical_score += 1
-                if latest['EMA21'] > latest['EMA50']:
-                    technical_score += 1
-                
-                # RSI conditions (US markets prefer different ranges)
-                if 25 <= rsi <= 55:  # Good RSI range for US stocks
-                    technical_score += 1
-                
-                # MACD bullish signal
-                if latest['MACD'] > latest['MACD_Signal']:
-                    technical_score += 1
-                
-                # Bollinger Band position (near lower band is good for entry)
-                bb_position = (latest['Close'] - latest['BB_Lower']) / (latest['BB_Upper'] - latest['BB_Lower'])
-                if 0.2 <= bb_position <= 0.6:  # Not at extremes
-                    technical_score += 1
-                
-                # Volume confirmation
-                if target_data['volume_surge']:
-                    technical_score += 1
-                
-                # Only include stocks with strong technical score (higher bar for US)
-                if technical_score >= 4:  # At least 4 of 6 conditions
+                # Only include stocks with good risk-reward ratio
+                if target_data['risk_reward_ratio'] >= 2.0:
                     
-                    # Risk rating based on volatility and market cap
-                    if current_price > 200 and target_data['volatility'] < 0.25:
-                        risk_rating = 'Low'
-                    elif target_data['volatility'] > 0.35:
-                        risk_rating = 'High'
-                    else:
-                        risk_rating = 'Medium'
+                    # Technical score calculation (more stringent for US)
+                    technical_score = 0
                     
-                    # Sector classification
-                    sector = get_stock_sector(symbol)
+                    # Trend alignment
+                    if latest['Close'] > latest['EMA21']:
+                        technical_score += 1
+                    if latest['EMA21'] > latest['EMA50']:
+                        technical_score += 1
                     
-                    recommendations.append({
-                        'Date': datetime.now().strftime('%Y-%m-%d'),
-                        'Stock': symbol,
-                        'LTP': round(current_price, 2),
-                        'RSI': round(rsi, 1),
-                        'Target': round(target_data['target'], 2),
-                        '% Gain': round(target_data['target_pct'], 1),
-                        'Est. Days': target_data['estimated_days'],
-                        'Stop Loss': round(target_data['stop_loss'], 2),
-                        'SL %': round(target_data['sl_pct'], 1),
-                        'Risk:Reward': f"1:{target_data['risk_reward_ratio']}",
-                        'Volume': int(avg_volume),
-                        'Risk': risk_rating,
-                        'Tech Score': f"{technical_score}/6",
-                        'Sector': sector,
-                        'Volatility': f"{target_data['volatility']:.1%}",
-                        'BB Position': f"{bb_position:.2f}",
-                        'Status': 'Active'
-                    })
+                    # RSI conditions (US markets prefer different ranges)
+                    if 25 <= rsi <= 55:  # Good RSI range for US stocks
+                        technical_score += 1
+                    
+                    # MACD bullish signal
+                    if latest['MACD'] > latest['MACD_Signal']:
+                        technical_score += 1
+                    
+                    # Bollinger Band position (near lower band is good for entry)
+                    bb_position = (latest['Close'] - latest['BB_Lower']) / (latest['BB_Upper'] - latest['BB_Lower'])
+                    if 0.2 <= bb_position <= 0.6:  # Not at extremes
+                        technical_score += 1
+                    
+                    # Volume confirmation
+                    if target_data['volume_surge']:
+                        technical_score += 1
+                    
+                    # Only include stocks with strong technical score (higher bar for US)
+                    if technical_score >= 4:  # At least 4 of 6 conditions
+                        
+                        # Risk rating based on volatility and market cap
+                        if current_price > 200 and target_data['volatility'] < 0.25:
+                            risk_rating = 'Low'
+                        elif target_data['volatility'] > 0.35:
+                            risk_rating = 'High'
+                        else:
+                            risk_rating = 'Medium'
+                        
+                        # Sector classification
+                        sector = get_stock_sector(symbol)
+                        
+                        # Market cap classification
+                        if current_price > 200:
+                            market_cap = 'Large Cap'
+                        elif current_price > 50:
+                            market_cap = 'Mid Cap'
+                        else:
+                            market_cap = 'Small Cap'
+                        
+                        recommendations.append({
+                            'Date': datetime.now().strftime('%Y-%m-%d'),
+                            'Stock': symbol,
+                            'LTP': round(current_price, 2),
+                            'RSI': round(rsi, 1),
+                            'Target': round(target_data['target'], 2),
+                            '% Gain': round(target_data['target_pct'], 1),
+                            'Est. Days': target_data['estimated_days'],
+                            'Stop Loss': round(target_data['stop_loss'], 2),
+                            'SL %': round(target_data['sl_pct'], 1),
+                            'Risk:Reward': f"1:{target_data['risk_reward_ratio']}",
+                            'Volume': int(avg_volume),
+                            'Risk': risk_rating,
+                            'Tech Score': f"{technical_score}/6",
+                            'Sector': sector,
+                            'Market Cap': market_cap,
+                            'Volatility': f"{target_data['volatility']:.1%}",
+                            'BB Position': f"{bb_position:.2f}",
+                            'Momentum': 'Positive' if target_data['momentum_5d'] > 0 else 'Negative',
+                            'Status': 'Active'
+                        })
         
         except Exception as e:
+            print(f"Error analyzing {symbol}: {e}")
             continue
     
     progress_bar.empty()
     status_text.empty()
     
-    # Sort by technical score and then by % gain potential
+    # Sort by risk-reward ratio and technical score
     df = pd.DataFrame(recommendations)
     if not df.empty:
-        df = df.sort_values(['Tech Score', '% Gain'], ascending=[False, False])
+        df['RR_numeric'] = df['Risk:Reward'].str.extract(r'1:(\d+\.?\d*)').astype(float)
+        df = df.sort_values(['RR_numeric', 'Tech Score'], ascending=[False, False])
+        df = df.drop('RR_numeric', axis=1)
     
     return df
 
 def get_stock_sector(symbol):
     """Get sector for US stock symbol"""
     sector_mapping = {
+        # Technology
         'AAPL': 'Technology', 'MSFT': 'Technology', 'GOOGL': 'Technology', 'AMZN': 'Technology',
         'TSLA': 'Technology', 'META': 'Technology', 'NVDA': 'Technology', 'NFLX': 'Technology',
         'ADBE': 'Technology', 'CRM': 'Technology', 'ORCL': 'Technology', 'INTC': 'Technology',
         'AMD': 'Technology', 'QCOM': 'Technology', 'AVGO': 'Technology', 'CSCO': 'Technology',
         'IBM': 'Technology', 'INTU': 'Technology', 'NOW': 'Technology', 'WDAY': 'Technology',
+        'VEEV': 'Technology', 'DDOG': 'Technology', 'SNOW': 'Technology', 'CRWD': 'Technology',
         
+        # Financial
         'JPM': 'Financial', 'BAC': 'Financial', 'WFC': 'Financial', 'GS': 'Financial',
         'MS': 'Financial', 'C': 'Financial', 'V': 'Financial', 'MA': 'Financial',
         'AXP': 'Financial', 'PYPL': 'Financial', 'BK': 'Financial', 'USB': 'Financial',
         'PNC': 'Financial', 'COF': 'Financial', 'SCHW': 'Financial', 'BLK': 'Financial',
+        'SPGI': 'Financial', 'MCO': 'Financial', 'AIG': 'Financial', 'TRV': 'Financial',
         
+        # Healthcare
         'JNJ': 'Healthcare', 'PFE': 'Healthcare', 'UNH': 'Healthcare', 'ABBV': 'Healthcare',
         'TMO': 'Healthcare', 'ABT': 'Healthcare', 'MDT': 'Healthcare', 'BMY': 'Healthcare',
         'AMGN': 'Healthcare', 'GILD': 'Healthcare', 'REGN': 'Healthcare', 'BSX': 'Healthcare',
         'SYK': 'Healthcare', 'ISRG': 'Healthcare', 'ZBH': 'Healthcare', 'BDX': 'Healthcare',
+        'EW': 'Healthcare', 'ALGN': 'Healthcare', 'MRNA': 'Healthcare', 'BNTX': 'Healthcare',
         
+        # Defense
         'BA': 'Defense', 'LMT': 'Defense', 'RTX': 'Defense', 'NOC': 'Defense', 'GD': 'Defense',
         'LHX': 'Defense', 'LDOS': 'Defense', 'HII': 'Defense', 'TDG': 'Defense', 'CW': 'Defense',
         
+        # Industrial
+        'CAT': 'Industrial', 'GE': 'Industrial', 'MMM': 'Industrial', 'HON': 'Industrial',
+        'UPS': 'Industrial', 'FDX': 'Industrial', 'EMR': 'Industrial', 'ETN': 'Industrial',
+        'ITW': 'Industrial', 'PH': 'Industrial', 'CMI': 'Industrial', 'DE': 'Industrial',
+        'DOV': 'Industrial', 'ROK': 'Industrial', 'CARR': 'Industrial', 'OTIS': 'Industrial',
+        
+        # Energy
         'XOM': 'Energy', 'CVX': 'Energy', 'COP': 'Energy', 'EOG': 'Energy', 'SLB': 'Energy',
         'MPC': 'Energy', 'VLO': 'Energy', 'PSX': 'Energy', 'OXY': 'Energy', 'HAL': 'Energy',
         
-        'WMT': 'Consumer', 'HD': 'Consumer', 'LOW': 'Consumer', 'COST': 'Consumer', 'TGT': 'Consumer',
-        'PG': 'Consumer', 'KO': 'Consumer', 'PEP': 'Consumer', 'MCD': 'Consumer', 'SBUX': 'Consumer',
-        'NKE': 'Consumer', 'TJX': 'Consumer', 'ROST': 'Consumer', 'YUM': 'Consumer', 'CMG': 'Consumer',
+        # Utilities
+        'NEE': 'Utilities', 'DUK': 'Utilities', 'SO': 'Utilities', 'AEP': 'Utilities',
+        'EXC': 'Utilities', 'XEL': 'Utilities', 'WEC': 'Utilities', 'ES': 'Utilities',
+        'AWK': 'Utilities', 'CMS': 'Utilities',
         
-        'CAT': 'Industrial', 'GE': 'Industrial', 'MMM': 'Industrial', 'HON': 'Industrial', 'UPS': 'Industrial',
-        'FDX': 'Industrial', 'EMR': 'Industrial', 'ETN': 'Industrial', 'ITW': 'Industrial', 'PH': 'Industrial',
-        'CMI': 'Industrial', 'DE': 'Industrial', 'DOV': 'Industrial', 'ROK': 'Industrial', 'CARR': 'Industrial',
+        # Consumer
+        'WMT': 'Consumer', 'HD': 'Consumer', 'LOW': 'Consumer', 'COST': 'Consumer',
+        'TGT': 'Consumer', 'PG': 'Consumer', 'KO': 'Consumer', 'PEP': 'Consumer',
+        'MCD': 'Consumer', 'SBUX': 'Consumer', 'NKE': 'Consumer', 'TJX': 'Consumer',
+        'ROST': 'Consumer', 'YUM': 'Consumer', 'CMG': 'Consumer', 'ULTA': 'Consumer',
+        'ETSY': 'Consumer', 'EBAY': 'Consumer', 'DIS': 'Consumer', 'F': 'Consumer',
         
-        'NEE': 'Utilities', 'DUK': 'Utilities', 'SO': 'Utilities', 'AEP': 'Utilities', 'EXC': 'Utilities',
-        'XEL': 'Utilities', 'WEC': 'Utilities', 'ES': 'Utilities', 'AWK': 'Utilities', 'CMS': 'Utilities',
+        # Materials
+        'LIN': 'Materials', 'APD': 'Materials', 'ECL': 'Materials', 'SHW': 'Materials',
+        'FCX': 'Materials', 'NEM': 'Materials', 'FMC': 'Materials', 'ALB': 'Materials',
+        'EMN': 'Materials', 'IFF': 'Materials', 'PPG': 'Materials', 'CF': 'Materials',
+        'MOS': 'Materials', 'LYB': 'Materials', 'DOW': 'Materials', 'DD': 'Materials',
         
-        'LIN': 'Materials', 'APD': 'Materials', 'ECL': 'Materials', 'SHW': 'Materials', 'FCX': 'Materials',
-        'NEM': 'Materials', 'FMC': 'Materials', 'ALB': 'Materials', 'EMN': 'Materials', 'IFF': 'Materials',
-        
+        # Communication
         'VZ': 'Communication', 'T': 'Communication', 'TMUS': 'Communication', 'CMCSA': 'Communication',
         'CHTR': 'Communication', 'FOXA': 'Communication', 'FOX': 'Communication', 'NWSA': 'Communication',
         
+        # Transportation
         'DAL': 'Transportation', 'UAL': 'Transportation', 'AAL': 'Transportation', 'LUV': 'Transportation',
         'NSC': 'Transportation', 'CSX': 'Transportation', 'UNP': 'Transportation', 'EXPD': 'Transportation',
+        'JBHT': 'Transportation',
         
+        # Real Estate
         'AMT': 'Real Estate', 'PLD': 'Real Estate', 'EQIX': 'Real Estate', 'SPG': 'Real Estate',
-        'O': 'Real Estate', 'PSA': 'Real Estate', 'EQR': 'Real Estate', 'AVB': 'Real Estate'
+        'O': 'Real Estate', 'PSA': 'Real Estate', 'EQR': 'Real Estate', 'AVB': 'Real Estate',
+        'ARE': 'Real Estate', 'DLR': 'Real Estate'
     }
     return sector_mapping.get(symbol, 'Others')
 
@@ -345,9 +409,9 @@ def get_us_market_overview():
     """Get US market overview"""
     try:
         # Fetch US indices
-        sp500 = yf.download("^GSPC", period="1d", interval="5m")
-        nasdaq = yf.download("^IXIC", period="1d", interval="5m")
-        dow = yf.download("^DJI", period="1d", interval="5m")
+        sp500 = yf.download("^GSPC", period="1d", interval="5m", progress=False)
+        nasdaq = yf.download("^IXIC", period="1d", interval="5m", progress=False)
+        dow = yf.download("^DJI", period="1d", interval="5m", progress=False)
         
         overview = {}
         
@@ -403,18 +467,14 @@ def get_sector_analysis_us(recommendations_df):
     if recommendations_df.empty:
         return {}
     
-    sector_counts = {}
-    for _, row in recommendations_df.iterrows():
-        sector = row.get('Sector', 'Others')
-        sector_counts[sector] = sector_counts.get(sector, 0) + 1
-    
+    sector_counts = recommendations_df['Sector'].value_counts().to_dict()
     return sector_counts
 
 def get_market_sentiment():
     """Get market sentiment based on VIX and technical indicators"""
     try:
         # Fetch VIX for market fear gauge
-        vix = yf.download("^VIX", period="5d")
+        vix = yf.download("^VIX", period="5d", progress=False)
         
         if not vix.empty:
             current_vix = vix['Close'].iloc[-1]
