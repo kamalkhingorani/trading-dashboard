@@ -1,26 +1,29 @@
-# Dockerfile for Kamal's Trading Dashboard on GCP
+# Use Python 3.10 slim image
+FROM python:3.10-slim
 
-# Step 1: Use a stable image with build tools
-FROM python:3.10
-
-# Step 2: Set working directory
+# Set working directory
 WORKDIR /app
 
-# Step 3: Install system dependencies (essential for many Python packages)
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
     libgl1-mesa-glx \
     && rm -rf /var/lib/apt/lists/*
 
-# Step 4: Copy local files
-COPY . /app
+# Copy requirements first for better caching
+COPY requirements.txt .
 
-# Step 5: Install Python dependencies
-RUN pip install --upgrade pip
-RUN pip install -r requirements.txt
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Step 6: Expose Streamlit port
+# Copy application code
+COPY . .
+
+# Expose Streamlit port
 EXPOSE 8501
 
-# Step 7: Run Streamlit app
-CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.enableCORS=false"]
+# Health check
+HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health
+
+# Run Streamlit
+CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
