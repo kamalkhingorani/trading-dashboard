@@ -4,12 +4,40 @@ import yfinance as yf
 from datetime import datetime, timedelta
 import numpy as np
 import time
+import sys
+import os
 
-# Import our custom modules
-from indian_stock_logic import get_indian_recommendations, get_indian_market_overview
-from us_stock_logic import get_us_recommendations, get_us_market_overview  
-from news_logic import get_latest_news
-from fixed_fno_options_logic import generate_fno_opportunities, get_options_summary
+# Add current directory to Python path to ensure imports work
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# Try importing with error handling
+try:
+    from indian_stock_logic import get_indian_recommendations, get_indian_market_overview
+    print("✓ indian_stock_logic imported successfully")
+except ImportError as e:
+    print(f"✗ Error importing indian_stock_logic: {e}")
+    st.error(f"Failed to import indian_stock_logic: {e}")
+
+try:
+    from us_stock_logic import get_us_recommendations, get_us_market_overview  
+    print("✓ us_stock_logic imported successfully")
+except ImportError as e:
+    print(f"✗ Error importing us_stock_logic: {e}")
+    st.error(f"Failed to import us_stock_logic: {e}")
+
+try:
+    from news_logic import get_latest_news
+    print("✓ news_logic imported successfully")
+except ImportError as e:
+    print(f"✗ Error importing news_logic: {e}")
+    st.error(f"Failed to import news_logic: {e}")
+
+try:
+    from fixed_fno_options_logic import generate_fno_opportunities, get_options_summary
+    print("✓ fixed_fno_options_logic imported successfully")
+except ImportError as e:
+    print(f"✗ Error importing fixed_fno_options_logic: {e}")
+    st.error(f"Failed to import fixed_fno_options_logic: {e}")
 
 # Page configuration
 st.set_page_config(
@@ -17,6 +45,14 @@ st.set_page_config(
     page_icon="📈",
     layout="wide"
 )
+
+# Show current working directory for debugging
+if st.sidebar.checkbox("Show Debug Info", value=False):
+    st.sidebar.write("Current Directory:", os.getcwd())
+    st.sidebar.write("Files in Directory:")
+    for file in os.listdir('.'):
+        if file.endswith('.py'):
+            st.sidebar.write(f"  - {file}")
 
 # Custom CSS
 st.markdown("""
@@ -132,11 +168,14 @@ with tab1:
     
     if st.button("🔄 Load Latest News", type="primary") or not st.session_state.news_data:
         with st.spinner("Fetching latest market news..."):
-            st.session_state.news_data = get_latest_news()
-            if st.session_state.news_data:
-                st.success(f"Loaded {len(st.session_state.news_data)} news items!")
-            else:
-                st.warning("No recent news found. Please check your internet connection.")
+            try:
+                st.session_state.news_data = get_latest_news()
+                if st.session_state.news_data:
+                    st.success(f"Loaded {len(st.session_state.news_data)} news items!")
+                else:
+                    st.warning("No recent news found. Please check your internet connection.")
+            except Exception as e:
+                st.error(f"Error loading news: {e}")
     
     if st.session_state.news_data:
         # News summary
@@ -194,17 +233,20 @@ with tab2:
     
     if st.button("🔍 Scan Indian Stocks", type="primary"):
         with st.spinner("Scanning NSE stocks with dynamic analysis..."):
-            st.session_state.indian_recos = get_indian_recommendations(
-                min_price=min_price_in, 
-                max_rsi=max_rsi_in,
-                batch_size=batch_size_in
-            )
-            st.session_state.scan_count += 1
-            
-            if not st.session_state.indian_recos.empty:
-                st.success(f"🎯 Found {len(st.session_state.indian_recos)} opportunities with proper risk-reward!")
-            else:
-                st.warning("No stocks found. Try adjusting filters or increasing batch size.")
+            try:
+                st.session_state.indian_recos = get_indian_recommendations(
+                    min_price=min_price_in, 
+                    max_rsi=max_rsi_in,
+                    batch_size=batch_size_in
+                )
+                st.session_state.scan_count += 1
+                
+                if not st.session_state.indian_recos.empty:
+                    st.success(f"🎯 Found {len(st.session_state.indian_recos)} opportunities with proper risk-reward!")
+                else:
+                    st.warning("No stocks found. Try adjusting filters or increasing batch size.")
+            except Exception as e:
+                st.error(f"Error scanning Indian stocks: {e}")
     
     if not st.session_state.indian_recos.empty:
         # Display metrics
@@ -275,17 +317,20 @@ with tab3:
     
     if st.button("🔍 Scan US Stocks", type="primary"):
         with st.spinner("Scanning S&P 500 stocks with advanced analysis..."):
-            st.session_state.us_recos = get_us_recommendations(
-                min_price=min_price_us,
-                max_rsi=max_rsi_us,
-                batch_size=batch_size_us
-            )
-            st.session_state.scan_count += 1
-            
-            if not st.session_state.us_recos.empty:
-                st.success(f"🎯 Found {len(st.session_state.us_recos)} opportunities with strong technicals!")
-            else:
-                st.warning("No stocks found. Try adjusting filters or increasing batch size.")
+            try:
+                st.session_state.us_recos = get_us_recommendations(
+                    min_price=min_price_us,
+                    max_rsi=max_rsi_us,
+                    batch_size=batch_size_us
+                )
+                st.session_state.scan_count += 1
+                
+                if not st.session_state.us_recos.empty:
+                    st.success(f"🎯 Found {len(st.session_state.us_recos)} opportunities with strong technicals!")
+                else:
+                    st.warning("No stocks found. Try adjusting filters or increasing batch size.")
+            except Exception as e:
+                st.error(f"Error scanning US stocks: {e}")
     
     if not st.session_state.us_recos.empty:
         # Display metrics
@@ -342,37 +387,40 @@ with tab4:
     
     if st.button("🔍 Generate F&O Opportunities", type="primary"):
         with st.spinner("Analyzing indices and stocks for directional opportunities..."):
-            st.session_state.fno_recos = generate_fno_opportunities()
-            st.session_state.scan_count += 1
-            
-            if not st.session_state.fno_recos.empty:
-                st.success(f"🎯 Generated {len(st.session_state.fno_recos)} directional opportunities!")
-            else:
-                st.warning("No opportunities found. Market may be in consolidation.")
+            try:
+                st.session_state.fno_recos = generate_fno_opportunities()
+                st.session_state.scan_count += 1
+                
+                if not st.session_state.fno_recos.empty:
+                    st.success(f"🎯 Generated {len(st.session_state.fno_recos)} directional opportunities!")
+                else:
+                    st.warning("No opportunities found. Market may be in consolidation.")
+            except Exception as e:
+                st.error(f"Error generating F&O opportunities: {e}")
     
     if not st.session_state.fno_recos.empty:
         # Get summary
         summary = get_options_summary(st.session_state.fno_recos)
         
         # Display market view
-        market_view_color = "#28a745" if summary['bullish_bias'] else "#dc3545"
+        market_view_color = "#28a745" if summary.get('bullish_bias', False) else "#dc3545"
         st.markdown(f"""
         <div style="background-color: {market_view_color}20; padding: 1rem; border-radius: 0.5rem; border-left: 4px solid {market_view_color}; margin-bottom: 1rem;">
-        <h3 style="margin: 0;">Market View: {summary['market_view']}</h3>
-        <p style="margin: 0.5rem 0 0 0;">CE Options: {summary['ce_count']} | PE Options: {summary['pe_count']}</p>
+        <h3 style="margin: 0;">Market View: {summary.get('market_view', 'Neutral')}</h3>
+        <p style="margin: 0.5rem 0 0 0;">CE Options: {summary.get('ce_count', 0)} | PE Options: {summary.get('pe_count', 0)}</p>
         </div>
         """, unsafe_allow_html=True)
         
         # Display metrics
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("Total Opportunities", summary['total_opportunities'])
+            st.metric("Total Opportunities", summary.get('total_opportunities', 0))
         with col2:
-            st.metric("Avg Gain Potential", f"{summary['avg_gain_potential']:.1f}%")
+            st.metric("Avg Gain Potential", f"{summary.get('avg_gain_potential', 0):.1f}%")
         with col3:
-            st.metric("NIFTY/BANKNIFTY", summary['nifty_options'] + summary['banknifty_options'])
+            st.metric("NIFTY/BANKNIFTY", summary.get('nifty_options', 0) + summary.get('banknifty_options', 0))
         with col4:
-            st.metric("Stock Options", summary['stock_options'])
+            st.metric("Stock Options", summary.get('stock_options', 0))
         
         # Display recommendations
         st.dataframe(
