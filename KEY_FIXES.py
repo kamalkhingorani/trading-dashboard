@@ -6,6 +6,9 @@
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fixed_fno_options_logic import fetch_current_index_prices
+index_data = fetch_current_index_prices()
+nifty_trend = index_data['NIFTY']['trend']
 
 # ============================================
 # FIX 2: Replace calculate_dynamic_targets in BOTH indian_stock_logic.py AND us_stock_logic.py
