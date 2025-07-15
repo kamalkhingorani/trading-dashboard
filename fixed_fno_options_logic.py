@@ -253,7 +253,9 @@ def generate_fno_opportunities():
     index_data = fetch_current_index_prices()
     
     # Stock symbols for F&O
-    fno_stocks = ['RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK']
+    url = "https://archives.nseindia.com/content/fo/fo_mktlots.csv"
+    fno_df = pd.read_csv(url)
+    fno_stocks = fno_df['SYMBOL'].dropna().unique().tolist()
     stock_data = fetch_stock_prices(fno_stocks)
     
     recommendations = []
