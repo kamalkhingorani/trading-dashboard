@@ -256,6 +256,11 @@ def generate_fno_opportunities():
     url = "https://archives.nseindia.com/content/fo/fo_mktlots.csv"
     fno_df = pd.read_csv(url)
     fno_stocks = fno_df['SYMBOL'].dropna().unique().tolist()
+
+    # Fetch NSE's official F&O list
+    fno_df = pd.read_csv("https://archives.nseindia.com/content/fo/fo_mktlots.csv")
+    fno_stocks = fno_df['SYMBOL'].dropna().unique().tolist()
+    
     stock_data = fetch_stock_prices(fno_stocks)
     
     recommendations = []
