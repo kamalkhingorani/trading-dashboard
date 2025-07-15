@@ -151,20 +151,7 @@ def fetch_stock_prices(symbols):
                     'trend': trend,
                     'momentum': momentum
                 }
-            else:
-                # Default prices if data unavailable
-                default_prices = {
-                    'RELIANCE': 2500,
-                    'TCS': 3200,
-                    'HDFCBANK': 1600,
-                    'INFY': 1400,
-                    'ICICIBANK': 950
-                }
-                prices[symbol] = {
-                    'price': default_prices.get(symbol, 1000),
-                    'trend': 'NEUTRAL',
-                    'momentum': 0
-                }
+            
         except:
             prices[symbol] = {
                 'price': 1000,
