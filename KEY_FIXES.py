@@ -165,13 +165,18 @@ nifty_option_type = 'CE' if nifty_trend == 'BULLISH' else 'PE'
 banknifty_trend = index_data['BANKNIFTY']['trend']
 banknifty_option_type = 'CE' if banknifty_trend == 'BULLISH' else 'PE'
 
-# For stocks - check trend first
-if stock_trend == 'BULLISH' and stock_momentum > 0.01:
-    option_type = 'CE'
-elif stock_trend == 'BEARISH' and stock_momentum < -0.01:
-    option_type = 'PE'
-else:
-    continue  # Skip if no clear direction
+for stock in stock_data:
+    stock_info = stock_data[stock]
+    stock_price = stock_info['price']
+    stock_trend = stock_info['trend']
+    stock_momentum = stock_info['momentum']
+
+    if stock_trend == 'BULLISH' and stock_momentum > 0.01:
+        option_type = 'CE'
+    elif stock_trend == 'BEARISH' and stock_momentum < -0.01:
+        option_type = 'PE'
+    else:
+        continue  # ✅ Now valid: inside for loop
 
 # ============================================
 # VERIFICATION CODE - Add this to test
