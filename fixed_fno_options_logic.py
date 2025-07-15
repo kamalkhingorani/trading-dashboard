@@ -151,7 +151,8 @@ def fetch_stock_prices(symbols):
                     'trend': trend,
                     'momentum': momentum
                 }
-            
+                if data.empty:
+                    continue  # Skip stock with no data
         except:
             prices[symbol] = {
                 'price': 1000,
