@@ -241,7 +241,8 @@ def get_us_recommendations(min_price=25, max_rsi=60, min_volume=1000000, batch_s
                 avg_volume >= min_volume * 0.3):
                 
                 # Calculate dynamic targets
-                target_data = calculate_dynamic_targets(data, current_price, 'US')
+                target_data = calculate_dynamic_targets(data, current_price, market='US')
+
                 
                 # Only include stocks with good risk-reward ratio
                 if target_data['risk_reward_ratio'] >= 2.0:
