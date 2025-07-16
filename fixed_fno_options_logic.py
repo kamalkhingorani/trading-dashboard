@@ -277,21 +277,25 @@ def generate_fno_opportunities():
                 strategy = f"Bearish on NIFTY (below {nifty_price:.0f})"
                 recommendation = 'BUY PE - Downtrend Play'
             
-            recommendations.append({
-                'Index/Stock': 'NIFTY',
-                'Current Price': nifty_price,
-                'Strike': int(strike),
-                'Type': nifty_option_type,
-                'LTP': option_data['current_premium'],
-                'Target': option_data['target_premium'],
-                '% Gain': option_data['gain_pct'],
-                'Days to Expiry': nifty_expiry_days,
-                'Expiry Date': expiry_dates['nifty'].strftime('%d-%b-%Y'),
-                'Moneyness': 'ATM' if abs(option_data['moneyness'] - 1) < 0.02 else ('ITM' if option_data['is_itm'] else 'OTM'),
-                'Strategy': strategy,
-                'Recommendation': recommendation,
-                'Risk Level': 'Medium' if abs(option_data['moneyness'] - 1) < 0.03 else 'High'
-            })
+           # Avoid duplicate NIFTY entries
+nifty_duplicate = any(
+    r['Index/Stock'] == 'NIFTY' and
+    r['Strike'] == nifty_strike and
+    r['Type'] == nifty_option_type
+    for r in recommendations
+)
+
+if not nifty_duplicate:
+    recommendations.append({
+        "Index/Stock": "NIFTY",
+        "Strike": nifty_strike,
+        "Type": nifty_option_type,
+        "Price": nifty_price,
+        "Trend": index_data['NIFTY']['trend'],
+        "Momentum": index_data['NIFTY']['momentum'],
+        "Entry": "AUTO"
+    })
+
     
     # BANK NIFTY Options (Monthly expiry) - Single direction based on trend
     banknifty_price = index_data['BANKNIFTY']['price']
