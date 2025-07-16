@@ -144,7 +144,7 @@ def generate_fno_opportunities():
                         'Index/Stock': idx,
                         'Current Price': px,
                         'Strike': int(strike),
-                        'Type': opt_type,
+                                                'Type': opt_type,
                         'LTP': data['current_premium'],
                         'Target': data['target_premium'],
                         '% Gain': data['gain_pct'],
@@ -186,8 +186,9 @@ def generate_fno_opportunities():
                     'Risk Level': 'High'
                 })
 
-    df = pd.DataFrame(recs)
-    if not df.empty:
-        df['risk_sort'] = df['Risk Level'].map({'Medium': 0, 'High': 1})
-        df = df.sort_values(['risk_sort', '% Gain'], ascending=[True, False]).drop('risk_sort', axis=1)
-    return df
+                     df = pd.DataFrame(recs)
+                     if not df.empty:
+                         # Sort by Risk Level (Medium first) and then by % Gain
+                         df['risk_sort'] = df['Risk Level'].map({'Medium': 0, 'High': 1})
+                         df = df.sort_values(['risk_sort', '% Gain'], ascending=[True, False]).drop('risk_sort', axis=1)
+                     return df
