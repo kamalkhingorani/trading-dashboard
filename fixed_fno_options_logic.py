@@ -335,7 +335,7 @@ def generate_fno_opportunities():
     # Stock Options (Monthly expiry) - Single direction per stock
     stock_expiry_days = (expiry_dates['stocks'] - datetime.now()).days
     
-    for stock in fno_stocks[:3]:  # Limit to top 3 stocks for memory
+    for stock in fno_stocks[:10]:  # Limit to top 3 stocks for memory
         stock_info = stock_data[stock]
         stock_price = stock_info['price']
         stock_trend = stock_info['trend']
