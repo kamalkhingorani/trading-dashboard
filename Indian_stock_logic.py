@@ -12,7 +12,7 @@ def calculate_rsi(data, window=14):
     rs = gain / loss
     return 100 - (100 / (1 + rs))
 
-def calculate_dynamic_targets(data, current_price):
+def calculate_dynamic_targets(data, current_price, market='Indian'):
     """Calculate dynamic targets based on multiple factors with proper risk management"""
     
     # Historical volatility (20-day)
@@ -230,7 +230,7 @@ def get_indian_recommendations(min_price=25, max_rsi=60, min_volume=100000, batc
                 avg_volume >= min_volume * 0.5):
                 
                 # Calculate dynamic targets
-                target_data = calculate_dynamic_targets(data, current_price)
+                target_data = calculate_dynamic_targets(data, current_price, market='Indian')
                 
                 # Only include stocks with good risk-reward ratio
                 if target_data['risk_reward_ratio'] >= 2.0:
