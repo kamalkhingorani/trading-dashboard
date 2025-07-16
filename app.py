@@ -6,7 +6,10 @@ import numpy as np
 import time
 import sys
 import os
-from fixed_fno_options_logic import generate_fno_opportunities, get_options_summary
+from fixed_fno_options_logic import (
+    generate_fno_opportunities,
+    get_options_summary
+)
 
 try:
     from fixed_fno_options_logic import generate_fno_opportunities, get_options_summary
