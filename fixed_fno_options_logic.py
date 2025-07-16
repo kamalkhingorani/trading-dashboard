@@ -278,23 +278,23 @@ def generate_fno_opportunities():
                 recommendation = 'BUY PE - Downtrend Play'
             
            # Avoid duplicate NIFTY entries
-nifty_duplicate = any(
-    r['Index/Stock'] == 'NIFTY' and
-    r['Strike'] == nifty_strike and
-    r['Type'] == nifty_option_type
-    for r in recommendations
-)
+           nifty_duplicate = any(
+               r['Index/Stock'] == 'NIFTY' and
+               r['Strike'] == nifty_strike and
+               r['Type'] == nifty_option_type
+               for r in recommendations
+           )
 
-if not nifty_duplicate:
-    recommendations.append({
-        "Index/Stock": "NIFTY",
-        "Strike": nifty_strike,
-        "Type": nifty_option_type,
-        "Price": nifty_price,
-        "Trend": index_data['NIFTY']['trend'],
-        "Momentum": index_data['NIFTY']['momentum'],
-        "Entry": "AUTO"
-    })
+           if not nifty_duplicate:
+               recommendations.append({
+               "Index/Stock": "NIFTY",
+               "Strike": nifty_strike,
+               "Type": nifty_option_type,
+               "Price": nifty_price,
+               "Trend": index_data['NIFTY']['trend'],
+               "Momentum": index_data['NIFTY']['momentum'],
+               "Entry": "AUTO"
+           })
 
     
     # BANK NIFTY Options (Monthly expiry) - Single direction based on trend
@@ -320,21 +320,24 @@ if not nifty_duplicate:
                 strategy = f"Banking sector bearish (below {banknifty_price:.0f})"
                 recommendation = 'BUY PE - Banking Weakness'
             
-            recommendations.append({
-                'Index/Stock': 'BANKNIFTY',
-                'Current Price': banknifty_price,
-                'Strike': int(strike),
-                'Type': banknifty_option_type,
-                'LTP': option_data['current_premium'],
-                'Target': option_data['target_premium'],
-                '% Gain': option_data['gain_pct'],
-                'Days to Expiry': banknifty_expiry_days,
-                'Expiry Date': expiry_dates['banknifty'].strftime('%d-%b-%Y'),
-                'Moneyness': 'ATM' if abs(option_data['moneyness'] - 1) < 0.02 else ('ITM' if option_data['is_itm'] else 'OTM'),
-                'Strategy': strategy,
-                'Recommendation': recommendation,
-                'Risk Level': 'High'  # Bank Nifty is more volatile
-            })
+           # Avoid duplicate BANKNIFTY entries
+           banknifty_duplicate = any(
+           r['Index/Stock'] == 'BANKNIFTY' and
+           r['Strike'] == banknifty_strike and
+           r['Type'] == banknifty_option_type
+           for r in recommendations
+    )
+
+if not banknifty_duplicate:
+    recommendations.append({
+        "Index/Stock": "BANKNIFTY",
+        "Strike": banknifty_strike,
+        "Type": banknifty_option_type,
+        "Price": banknifty_price,
+        "Trend": index_data['BANKNIFTY']['trend'],
+        "Momentum": index_data['BANKNIFTY']['momentum'],
+        "Entry": "AUTO"
+    })
     
     # Stock Options (Monthly expiry) - Single direction per stock
     stock_expiry_days = (expiry_dates['stocks'] - datetime.now()).days
