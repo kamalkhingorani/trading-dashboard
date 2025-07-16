@@ -11,13 +11,6 @@ from fixed_fno_options_logic import (
     get_options_summary
 )
 
-try:
-    from fixed_fno_options_logic import generate_fno_opportunities, get_options_summary
-except Exception as e:
-    import streamlit as st
-    st.error(f"IMPORT FAILED: {e}")
-    raise
-
 # Add current directory to Python path to ensure imports work
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
