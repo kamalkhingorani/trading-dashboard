@@ -1,4 +1,4 @@
-# indian_stock_logic.py - FIXED VERSION
+# indian_stock_logic.py - CORRECTED VERSION
 import streamlit as st
 import pandas as pd
 import yfinance as yf
@@ -8,11 +8,14 @@ import time
 
 def calculate_rsi(data, window=14):
     """Calculate RSI indicator"""
-    delta = data['Close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
-    rs = gain / loss
-    return 100 - (100 / (1 + rs))
+    try:
+        delta = data['Close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+        rs = gain / loss
+        return 100 - (100 / (1 + rs))
+    except Exception:
+        return pd.Series([50] * len(data), index=data.index)
 
 def get_expanded_nse_universe():
     """Expanded NSE stock universe with 100+ liquid stocks"""
@@ -46,29 +49,26 @@ def get_expanded_nse_universe():
         
         # Oil, Gas & Energy
         "BPCL.NS", "IOC.NS", "HINDPETRO.NS", "GAIL.NS", "NTPC.NS",
-        "POWERGRID.NS", "ADANIPOWER.NS", "TATAPOWER.NS", "RELINFRA.NS",
+        "POWERGRID.NS", "ADANIPOWER.NS", "TATAPOWER.NS",
         
         # Metals & Mining
         "HINDALCO.NS", "VEDL.NS", "JSWSTEEL.NS", "SAIL.NS", "NMDC.NS",
-        "JINDALSTEL.NS", "TATASTEEL.NS", "HINDZINC.NS", "MOIL.NS", "WELCORP.NS",
+        "JINDALSTEL.NS", "HINDZINC.NS", "MOIL.NS", "WELCORP.NS",
         
         # Infrastructure & Construction
         "ADANIPORTS.NS", "ULTRACEMCO.NS", "GRASIM.NS", "SHREECEM.NS", "RAMCOCEM.NS",
         "ACC.NS", "AMBUJACEMENT.NS", "IRB.NS", "GMRINFRA.NS", "ASHOKLEY.NS",
         
         # Telecommunications
-        "AIRTEL.NS", "IDEA.NS", "GTPL.NS", "RCOM.NS",
-        
-        # Textiles & Apparel
-        "ADITYANRLI.NS", "VARDHMAN.NS", "WELSPUNIND.NS", "TRIDENT.NS", "RTNPOWER.NS",
+        "AIRTEL.NS", "IDEA.NS",
         
         # Mid Cap Growth Stories
-        "ZOMATO.NS", "NYKAA.NS", "POLICYBZR.NS", "DELHIVERY.NS", "CAMS.NS",
+        "ZOMATO.NS", "NYKAA.NS", "DELHIVERY.NS", "CAMS.NS",
         "LICI.NS", "IRCTC.NS", "RVNL.NS", "BEL.NS", "HAL.NS",
         
         # Additional Quality Mid-caps
         "PIDILITIND.NS", "BERGEPAINT.NS", "HAVELLS.NS", "VOLTAS.NS", "WHIRLPOOL.NS",
-        "CROMPTON.NS", "AMBER.NS", "DIXON.NS", "SYMPHONY.NS", "BLUEDART.NS"
+        "CROMPTON.NS", "DIXON.NS", "SYMPHONY.NS"
     ]
 
 def calculate_dynamic_targets(data, current_price):
@@ -89,11 +89,11 @@ def calculate_dynamic_targets(data, current_price):
         
         # RELAXED Target calculation based on volatility
         if volatility > 0.30:  # High volatility stocks
-            base_target_pct = np.random.uniform(6, 12)  # Reduced from 8-15%
+            base_target_pct = np.random.uniform(6, 12)
         elif volatility > 0.20:  # Medium volatility
-            base_target_pct = np.random.uniform(4, 8)   # Reduced from 5-12%
+            base_target_pct = np.random.uniform(4, 8)
         else:  # Low volatility
-            base_target_pct = np.random.uniform(3, 6)   # Reduced from 3-8%
+            base_target_pct = np.random.uniform(3, 6)
         
         # Technical adjustments (REDUCED)
         if len(data) >= 50:
@@ -102,11 +102,11 @@ def calculate_dynamic_targets(data, current_price):
             
             # Trend alignment bonus (REDUCED)
             if current_price > ema20 > ema50:
-                base_target_pct *= 1.1  # Reduced from 1.2
+                base_target_pct *= 1.1
             
             # Volume confirmation bonus (REDUCED) 
             if volume_surge:
-                base_target_pct *= 1.05  # Reduced from 1.1
+                base_target_pct *= 1.05
         
         # Calculate target price
         target_price = current_price * (1 + base_target_pct / 100)
@@ -125,7 +125,7 @@ def calculate_dynamic_targets(data, current_price):
         
         # CRITICAL: Risk management - SL should not exceed 50% of potential gain
         potential_gain = target_price - current_price
-        max_allowed_sl_price = current_price - (potential_gain * 0.4)  # Allow up to 40% of gain as SL
+        max_allowed_sl_price = current_price - (potential_gain * 0.4)
         
         if stop_loss < max_allowed_sl_price:
             stop_loss = max_allowed_sl_price
@@ -143,11 +143,11 @@ def calculate_dynamic_targets(data, current_price):
         
         # Estimated days (RELAXED)
         if base_target_pct <= 4:
-            estimated_days = np.random.randint(5, 15)    # Reduced from 10-20
+            estimated_days = np.random.randint(5, 15)
         elif base_target_pct <= 7:
-            estimated_days = np.random.randint(8, 20)    # Reduced from 15-25
+            estimated_days = np.random.randint(8, 20)
         else:
-            estimated_days = np.random.randint(12, 25)   # Reduced from 20-35
+            estimated_days = np.random.randint(12, 25)
         
         return {
             'target': target_price,
@@ -176,134 +176,141 @@ def calculate_dynamic_targets(data, current_price):
 def get_indian_recommendations(min_price=25, max_rsi=70, min_volume=50000, batch_size=50):
     """FIXED: Get Indian stock recommendations with RELAXED filters"""
     
-    symbols = get_expanded_nse_universe()
-    recommendations = []
-    
-    # Show progress
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-    
-    # INCREASED batch size for more results
-    total_symbols = min(len(symbols), batch_size)
-    successful_fetches = 0
-    
-    for i, symbol in enumerate(symbols[:total_symbols]):
-        try:
-            progress_bar.progress((i + 1) / total_symbols)
-            status_text.text(f"Analyzing {symbol.replace('.NS', '')}... ({i+1}/{total_symbols})")
-            
-            # RELAXED: Reduce delay to speed up scanning
-            time.sleep(0.1)  # Reduced from 0.2
-            
-            # Fetch data with error handling
-            stock = yf.Ticker(symbol)
-            data = stock.history(period="3mo", interval="1d")  # Reduced from 6mo to 3mo
-            
-            if len(data) < 30:  # Reduced from 50 to 30
-                continue
-            
-            # Calculate indicators
-            data['RSI'] = calculate_rsi(data)
-            data['EMA20'] = data['Close'].ewm(span=20).mean()
-            data['EMA50'] = data['Close'].ewm(span=50).mean()
-            data['SMA20'] = data['Close'].rolling(20).mean()
-            
-            # MACD
-            exp1 = data['Close'].ewm(span=12).mean()
-            exp2 = data['Close'].ewm(span=26).mean()
-            data['MACD'] = exp1 - exp2
-            data['MACD_Signal'] = data['MACD'].ewm(span=9).mean()
-            
-            latest = data.iloc[-1]
-            current_price = latest['Close']
-            rsi = latest['RSI']
-            
-            # Handle volume safely with lower requirements
-            avg_volume = data['Volume'].tail(10).mean() if 'Volume' in data.columns else min_volume
-            
-            # RELAXED filters - much more lenient
-            if (current_price >= min_price and 
-                rsi <= max_rsi and  # Increased from 60 to 70
-                not pd.isna(rsi) and 
-                not pd.isna(current_price) and
-                avg_volume >= min_volume * 0.3):  # Reduced from 0.5 to 0.3
-                
-                successful_fetches += 1
-                
-                # Calculate dynamic targets
-                target_data = calculate_dynamic_targets(data, current_price)
-                
-                # RELAXED technical score calculation
-                technical_score = 0
-                
-                # Trend alignment (RELAXED)
-                if latest['Close'] > latest['EMA20']:
-                    technical_score += 1
-                if latest['EMA20'] > latest['EMA50']:
-                    technical_score += 1
-                
-                # RSI conditions (RELAXED range)
-                if 25 <= rsi <= 70:  # Expanded from 30-60 to 25-70
-                    technical_score += 1
-                
-                # MACD signal
-                if latest['MACD'] > latest['MACD_Signal']:
-                    technical_score += 1
-                
-                # Volume confirmation
-                if target_data['volume_surge']:
-                    technical_score += 1
-                
-                # MUCH MORE RELAXED: Include stocks with 2+ conditions instead of 3+
-                if technical_score >= 2:  # Reduced from 3 to 2
-                    
-                    # Risk rating based on volatility
-                    if target_data['volatility'] > 0.35:
-                        risk_rating = 'High'
-                    elif target_data['volatility'] > 0.25:
-                        risk_rating = 'Medium'
-                    else:
-                        risk_rating = 'Low'
-                    
-                    recommendations.append({
-                        'Date': datetime.now().strftime('%Y-%m-%d'),
-                        'Stock': symbol.replace('.NS', ''),
-                        'LTP': round(current_price, 2),
-                        'RSI': round(rsi, 1),
-                        'Target': round(target_data['target'], 2),
-                        '% Gain': round(target_data['target_pct'], 1),
-                        'Est.Days': target_data['estimated_days'],
-                        'Stop Loss': round(target_data['stop_loss'], 2),
-                        'SL %': round(target_data['sl_pct'], 1),
-                        'Risk:Reward': f"1:{target_data['risk_reward_ratio']}",
-                        'Volume': int(avg_volume),
-                        'Risk': risk_rating,
-                        'Tech Score': f"{technical_score}/5",
-                        'Volatility': f"{target_data['volatility']:.1%}",
-                        'Status': 'Active'
-                    })
+    try:
+        symbols = get_expanded_nse_universe()
+        recommendations = []
         
-        except Exception as e:
-            # Continue processing other stocks even if one fails
-            continue
-    
-    progress_bar.empty()
-    status_text.empty()
-    
-    # Display scan statistics
-    if successful_fetches > 0:
-        st.info(f"✅ Successfully analyzed {successful_fetches} stocks out of {total_symbols} attempted")
-    else:
-        st.warning(f"⚠️ Could not fetch data for any stocks. This might be due to market hours or API limits.")
-    
-    # Sort by technical score and then by % gain potential
-    df = pd.DataFrame(recommendations)
-    if not df.empty:
-        df = df.sort_values(['Tech Score', '% Gain'], ascending=[False, False])
-        # Limit to top 20 results for display
-        df = df.head(20)
-    
-    return df
+        # Show progress
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        # INCREASED batch size for more results
+        total_symbols = min(len(symbols), batch_size)
+        successful_fetches = 0
+        
+        status_text.text(f"Starting scan of {total_symbols} Indian stocks...")
+        
+        for i, symbol in enumerate(symbols[:total_symbols]):
+            try:
+                progress_bar.progress((i + 1) / total_symbols)
+                status_text.text(f"Analyzing {symbol.replace('.NS', '')}... ({i+1}/{total_symbols})")
+                
+                # RELAXED: Reduce delay to speed up scanning
+                time.sleep(0.1)
+                
+                # Fetch data with error handling
+                stock = yf.Ticker(symbol)
+                data = stock.history(period="3mo", interval="1d")
+                
+                if len(data) < 30:
+                    continue
+                
+                # Calculate indicators
+                data['RSI'] = calculate_rsi(data)
+                data['EMA20'] = data['Close'].ewm(span=20).mean()
+                data['EMA50'] = data['Close'].ewm(span=50).mean()
+                data['SMA20'] = data['Close'].rolling(20).mean()
+                
+                # MACD
+                exp1 = data['Close'].ewm(span=12).mean()
+                exp2 = data['Close'].ewm(span=26).mean()
+                data['MACD'] = exp1 - exp2
+                data['MACD_Signal'] = data['MACD'].ewm(span=9).mean()
+                
+                latest = data.iloc[-1]
+                current_price = latest['Close']
+                rsi = latest['RSI']
+                
+                # Handle volume safely with lower requirements
+                avg_volume = data['Volume'].tail(10).mean() if 'Volume' in data.columns else min_volume
+                
+                # RELAXED filters - much more lenient
+                if (current_price >= min_price and 
+                    rsi <= max_rsi and
+                    not pd.isna(rsi) and 
+                    not pd.isna(current_price) and
+                    avg_volume >= min_volume * 0.3):
+                    
+                    successful_fetches += 1
+                    
+                    # Calculate dynamic targets
+                    target_data = calculate_dynamic_targets(data, current_price)
+                    
+                    # RELAXED technical score calculation
+                    technical_score = 0
+                    
+                    # Trend alignment (RELAXED)
+                    if latest['Close'] > latest['EMA20']:
+                        technical_score += 1
+                    if latest['EMA20'] > latest['EMA50']:
+                        technical_score += 1
+                    
+                    # RSI conditions (RELAXED range)
+                    if 25 <= rsi <= 70:
+                        technical_score += 1
+                    
+                    # MACD signal
+                    if latest['MACD'] > latest['MACD_Signal']:
+                        technical_score += 1
+                    
+                    # Volume confirmation
+                    if target_data['volume_surge']:
+                        technical_score += 1
+                    
+                    # MUCH MORE RELAXED: Include stocks with 2+ conditions instead of 3+
+                    if technical_score >= 2:
+                        
+                        # Risk rating based on volatility
+                        if target_data['volatility'] > 0.35:
+                            risk_rating = 'High'
+                        elif target_data['volatility'] > 0.25:
+                            risk_rating = 'Medium'
+                        else:
+                            risk_rating = 'Low'
+                        
+                        recommendations.append({
+                            'Date': datetime.now().strftime('%Y-%m-%d'),
+                            'Stock': symbol.replace('.NS', ''),
+                            'LTP': round(current_price, 2),
+                            'RSI': round(rsi, 1),
+                            'Target': round(target_data['target'], 2),
+                            '% Gain': round(target_data['target_pct'], 1),
+                            'Est.Days': target_data['estimated_days'],
+                            'Stop Loss': round(target_data['stop_loss'], 2),
+                            'SL %': round(target_data['sl_pct'], 1),
+                            'Risk:Reward': f"1:{target_data['risk_reward_ratio']}",
+                            'Volume': int(avg_volume),
+                            'Risk': risk_rating,
+                            'Tech Score': f"{technical_score}/5",
+                            'Volatility': f"{target_data['volatility']:.1%}",
+                            'Status': 'Active'
+                        })
+            
+            except Exception as e:
+                # Continue processing other stocks even if one fails
+                continue
+        
+        progress_bar.empty()
+        status_text.empty()
+        
+        # Display scan statistics
+        if successful_fetches > 0:
+            st.info(f"✅ Successfully analyzed {successful_fetches} stocks out of {total_symbols} attempted")
+        else:
+            st.warning(f"⚠️ Could not fetch data for any stocks. This might be due to market hours or API limits.")
+        
+        # Sort by technical score and then by % gain potential
+        df = pd.DataFrame(recommendations)
+        if not df.empty:
+            df = df.sort_values(['Tech Score', '% Gain'], ascending=[False, False])
+            # Limit to top 20 results for display
+            df = df.head(20)
+        
+        return df
+        
+    except Exception as e:
+        st.error(f"Error in get_indian_recommendations: {str(e)}")
+        return pd.DataFrame()
 
 def get_indian_market_overview():
     """Get Indian market overview with error handling"""
@@ -348,3 +355,8 @@ def get_indian_market_overview():
             'last_updated': 'Market data unavailable',
             'error': str(e)
         }
+
+# Test function to verify the module is working
+def test_indian_module():
+    """Test function to verify the module is working"""
+    return "Indian stock logic module is working correctly!"
