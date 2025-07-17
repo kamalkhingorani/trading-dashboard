@@ -1,450 +1,581 @@
+#!/usr/bin/env python3
+"""
+F&O Options Trading Bot - Reversal Based Strategy
+Version: 5.0 CORRECTED
+Date: 14-July-2025
+
+STRATEGY:
+- Trade on candle color reversal with body confirmation
+- Exit immediately on opposite color candle
+- One position at a time across all symbols
+- Quick scalping based on momentum reversals
+"""
+
+import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
-import streamlit as st
-import calendar
+from datetime import datetime, timedelta, time
+import pytz
+import time as tm
+import logging
+from typing import Dict, List, Tuple, Optional
+import math
+import warnings
+warnings.filterwarnings('ignore')
 
-def get_next_expiry_dates():
-    """Get correct expiry dates for Indian options"""
-    today = datetime.now()
-    
-    # Find next Thursday for Nifty (weekly)
-    days_ahead = 3 - today.weekday()  # Thursday is weekday 3
-    if days_ahead <= 0:  # Thursday already passed this week
-        days_ahead += 7
-    next_nifty_expiry = today + timedelta(days=days_ahead)
-    
-    # Find last Thursday of current month for Bank Nifty (monthly)
-    current_month = today.month
-    current_year = today.year
-    
-    # Get last day of current month
-    last_day = calendar.monthrange(current_year, current_month)[1]
-    last_date = datetime(current_year, current_month, last_day)
-    
-    # Find last Thursday of the month
-    while last_date.weekday() != 3:  # Thursday is weekday 3
-        last_date -= timedelta(days=1)
-    
-    # If last Thursday has passed, get last Thursday of next month
-    if last_date <= today:
-        if current_month == 12:
-            next_month = 1
-            next_year = current_year + 1
-        else:
-            next_month = current_month + 1
-            next_year = current_year
-            
-        last_day = calendar.monthrange(next_year, next_month)[1]
-        last_date = datetime(next_year, next_month, last_day)
-        
-        while last_date.weekday() != 3:  # Thursday is weekday 3
-            last_date -= timedelta(days=1)
-    
-    next_banknifty_expiry = last_date
-    
-    # Stock options also expire on last Thursday of the month (monthly)
-    next_stock_expiry = next_banknifty_expiry
-    
-    return {
-        'nifty': next_nifty_expiry,
-        'banknifty': next_banknifty_expiry,
-        'stocks': next_stock_expiry
-    }
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] %(message)s',
+    datefmt='%H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
-def get_correct_strike_prices(underlying_price, option_type='index', num_strikes=5):
-    """Get correct strike prices based on Indian market rules"""
+class ReversalOptionsTrader:
+    """
+    Reversal-based options trading system
+    Trades on candle color changes with immediate exit on reversal
+    """
     
-    if option_type == 'index':
-        if underlying_price >= 20000:  # Nifty/Bank Nifty range
-            # Strike interval of 50 for Nifty, 100 for Bank Nifty
-            if underlying_price > 40000:  # Bank Nifty range
-                interval = 100
-            else:  # Nifty range
-                interval = 50
-        else:
-            interval = 25
-    else:  # Stock options
-        if underlying_price >= 2000:
-            interval = 100
-        elif underlying_price >= 1000:
-            interval = 50
-        elif underlying_price >= 500:
-            interval = 20
-        elif underlying_price >= 250:
-            interval = 10
-        else:
-            interval = 5
-    
-    # Generate ATM and nearby strikes
-    atm_strike = round(underlying_price / interval) * interval
-    
-    strikes = []
-    # For directional recommendations, focus on ATM and slightly OTM strikes
-    for i in range(-1, num_strikes):
-        strike = atm_strike + (i * interval)
-        if strike > 0:
-            strikes.append(strike)
-    
-    return strikes
-
-def fetch_current_index_prices():
-    """Fetch current prices of indices with technical indicators"""
-    try:
-        # Fetch current Nifty price with history
-        nifty = yf.Ticker("^NSEI")
-        nifty_data = nifty.history(period="1mo")
-        if not nifty_data.empty:
-            nifty_price = nifty_data['Close'].iloc[-1]
-            nifty_sma20 = nifty_data['Close'].tail(20).mean()
-            nifty_trend = "BULLISH" if nifty_price > nifty_sma20 else "BEARISH"
-        else:
-            nifty_price = 22000.0
-            nifty_trend = "NEUTRAL"
+    def __init__(self):
+        self.ist = pytz.timezone('Asia/Kolkata')
+        self.active_position = None  # Only ONE position at a time
+        self.last_candle_color = {}  # Track last candle color for each symbol
+        self.trade_history = []
+        self.daily_pnl = 0
         
-        # Fetch current Bank Nifty price with history
-        banknifty = yf.Ticker("^NSEBANK")
-        banknifty_data = banknifty.history(period="1mo")
-        if not banknifty_data.empty:
-            banknifty_price = banknifty_data['Close'].iloc[-1]
-            banknifty_sma20 = banknifty_data['Close'].tail(20).mean()
-            banknifty_trend = "BULLISH" if banknifty_price > banknifty_sma20 else "BEARISH"
-        else:
-            banknifty_price = 48000.0
-            banknifty_trend = "NEUTRAL"
-        
-        return {
+        # Market specifications
+        self.market_specs = {
             'NIFTY': {
-                'price': round(nifty_price, 2),
-                'trend': nifty_trend
+                'lot_size': 50,
+                'strike_interval': 50,
+                'symbol': '^NSEI',
+                'trading_symbol': 'NIFTY'
             },
             'BANKNIFTY': {
-                'price': round(banknifty_price, 2),
-                'trend': banknifty_trend
+                'lot_size': 25,
+                'strike_interval': 100,
+                'symbol': '^NSEBANK',
+                'trading_symbol': 'BANKNIFTY'
             }
         }
-    except:
-        return {
-            'NIFTY': {'price': 22000.0, 'trend': 'NEUTRAL'},
-            'BANKNIFTY': {'price': 48000.0, 'trend': 'NEUTRAL'}
-        }
-
-def fetch_stock_prices(symbols):
-    """Fetch current prices of stocks with technical bias"""
-    prices = {}
-    for symbol in symbols:
+        
+        # Strategy parameters
+        self.max_loss_per_trade = 1000  # ₹1000 max loss per trade
+        self.profit_target = 1500       # ₹1500 profit target
+        self.enable_reversal_exit = True  # Exit on color reversal
+        
+        logger.info("="*60)
+        logger.info("REVERSAL OPTIONS TRADING BOT INITIALIZED")
+        logger.info("Strategy: Trade on color reversal, exit on opposite color")
+        logger.info("Max positions: 1 at a time")
+        logger.info("="*60)
+    
+    def get_market_config(self, symbol: str) -> Dict:
+        """Get market configuration for a symbol"""
+        for market, config in self.market_specs.items():
+            if config['symbol'] == symbol:
+                return config
+        return None
+    
+    def calculate_current_expiry(self) -> Tuple[str, int]:
+        """Calculate current weekly expiry (Thursday)"""
+        today = datetime.now(self.ist).date()
+        days_to_thursday = (3 - today.weekday()) % 7
+        
+        if days_to_thursday == 0:  # Today is Thursday
+            current_time = datetime.now(self.ist).time()
+            if current_time > time(15, 30):
+                days_to_thursday = 7
+        
+        expiry_date = today + timedelta(days=days_to_thursday)
+        return expiry_date.strftime('%d%b').upper(), days_to_thursday
+    
+    def get_atm_strike(self, spot_price: float, strike_interval: int) -> int:
+        """Get ATM strike price"""
+        return round(spot_price / strike_interval) * strike_interval
+    
+    def calculate_option_premium(self, spot: float, strike: int, days_to_expiry: int,
+                               option_type: str, volatility: float = 0.15) -> float:
+        """Calculate realistic option premium"""
+        time_value = spot * volatility * math.sqrt(days_to_expiry / 365) * 0.4
+        
+        if option_type == 'PE':
+            intrinsic = max(0, strike - spot)
+        else:
+            intrinsic = max(0, spot - strike)
+        
+        # Adjust time value for moneyness
+        moneyness = abs(spot - strike) / spot
+        if moneyness < 0.005:  # ATM
+            time_value *= 1.0
+        elif moneyness < 0.01:  # Near ATM
+            time_value *= 0.8
+        else:  # OTM
+            time_value *= 0.5
+        
+        premium = intrinsic + time_value
+        return round(premium * 20) / 20  # Round to 0.05
+    
+    def fetch_candle_data(self, symbol: str) -> Optional[Dict]:
+        """Fetch current candle data"""
         try:
-            stock = yf.Ticker(f"{symbol}.NS")
-            data = stock.history(period="1mo")
-            if not data.empty:
-                current_price = round(data['Close'].iloc[-1], 2)
-                sma20 = data['Close'].tail(20).mean()
-                trend = "BULLISH" if current_price > sma20 else "BEARISH"
-                
-                # Calculate momentum
-                price_5d_ago = data['Close'].iloc[-6] if len(data) >= 6 else current_price
-                momentum = (current_price - price_5d_ago) / price_5d_ago
-                
-                prices[symbol] = {
-                    'price': current_price,
-                    'trend': trend,
-                    'momentum': momentum
-                }
-                if data.empty:
-                    continue  # Skip stock with no data
-        except:
-            prices[symbol] = {
-                'price': 1000,
-                'trend': 'NEUTRAL',
-                'momentum': 0
+            ticker = yf.Ticker(symbol)
+            df = ticker.history(period='5d', interval='1h', prepost=False)
+            
+            if df.empty or len(df) < 2:
+                return None
+            
+            current = df.iloc[-1]
+            previous = df.iloc[-2]
+            
+            # Calculate candle metrics
+            body_size = abs(current['Close'] - current['Open'])
+            full_range = current['High'] - current['Low']
+            
+            candle_data = {
+                'symbol': symbol,
+                'timestamp': df.index[-1],
+                'open': round(current['Open'], 2),
+                'high': round(current['High'], 2),
+                'low': round(current['Low'], 2),
+                'close': round(current['Close'], 2),
+                'color': 'GREEN' if current['Close'] >= current['Open'] else 'RED',
+                'prev_color': 'GREEN' if previous['Close'] >= previous['Open'] else 'RED',
+                'body_percent': round((body_size / full_range * 100) if full_range > 0 else 0, 1),
+                'has_body': body_size > (full_range * 0.5) if full_range > 0 else False,
+                'volume': current['Volume']
             }
-    
-    return prices
-
-def calculate_option_targets(underlying_price, strike, option_type, expiry_days, underlying_name, trend):
-    """Calculate realistic option price targets based on directional bias"""
-    
-    # Moneyness calculation
-    if option_type == 'CE':
-        moneyness = underlying_price / strike
-        is_itm = underlying_price > strike
-    else:  # PE
-        moneyness = strike / underlying_price  
-        is_itm = underlying_price < strike
-    
-    # Base premium calculation (simplified Black-Scholes approximation)
-    time_value = max(0.1, expiry_days / 365)
-    
-    # Volatility assumptions based on underlying
-    if underlying_name in ['NIFTY', 'BANKNIFTY']:
-        implied_vol = 0.15 + (0.1 * abs(1 - moneyness))  # 15-25% IV for indices
-    else:
-        implied_vol = 0.25 + (0.15 * abs(1 - moneyness))  # 25-40% IV for stocks
-    
-    # Intrinsic value
-    if option_type == 'CE':
-        intrinsic = max(0, underlying_price - strike)
-    else:
-        intrinsic = max(0, strike - underlying_price)
-    
-    # Time value (simplified)
-    time_premium = underlying_price * implied_vol * np.sqrt(time_value) * 0.4
-    
-    current_premium = intrinsic + time_premium
-    current_premium = max(current_premium, 5)  # Minimum premium of 5
-    
-    # Target calculation based on expected move and trend
-    if underlying_name in ['NIFTY', 'BANKNIFTY']:
-        if trend == "BULLISH" and option_type == "CE":
-            expected_move_pct = np.random.uniform(0.03, 0.08)  # 3-8% bullish move
-        elif trend == "BEARISH" and option_type == "PE":
-            expected_move_pct = np.random.uniform(0.03, 0.08)  # 3-8% bearish move
-        else:
-            expected_move_pct = np.random.uniform(0.01, 0.04)  # Smaller move against trend
-    else:  # Stocks
-        if (trend == "BULLISH" and option_type == "CE") or (trend == "BEARISH" and option_type == "PE"):
-            expected_move_pct = np.random.uniform(0.04, 0.10)  # 4-10% directional move
-        else:
-            expected_move_pct = np.random.uniform(0.02, 0.05)  # Smaller move against trend
-    
-    # Target multiplier based on moneyness and trend alignment
-    if (option_type == 'CE' and trend == 'BULLISH') or (option_type == 'PE' and trend == 'BEARISH'):
-        # Trend-aligned options
-        if abs(moneyness - 1) < 0.02:  # ATM options
-            target_multiplier = 1.8 + np.random.uniform(0, 0.7)  # 1.8x to 2.5x
-        elif is_itm:  # ITM options
-            target_multiplier = 1.3 + np.random.uniform(0, 0.4)  # 1.3x to 1.7x
-        else:  # OTM options
-            target_multiplier = 2.2 + np.random.uniform(0, 1.3)  # 2.2x to 3.5x
-    else:
-        # Against-trend options (lower potential)
-        target_multiplier = 1.1 + np.random.uniform(0, 0.3)  # 1.1x to 1.4x
-    
-    target_premium = current_premium * target_multiplier
-    gain_pct = ((target_premium - current_premium) / current_premium) * 100
-    
-    return {
-        'current_premium': round(current_premium, 2),
-        'target_premium': round(target_premium, 2),
-        'gain_pct': round(gain_pct, 1),
-        'moneyness': round(moneyness, 3),
-        'is_itm': is_itm,
-        'trend_aligned': (option_type == 'CE' and trend == 'BULLISH') or (option_type == 'PE' and trend == 'BEARISH')
-    }
-
-def generate_fno_opportunities():
-    """Generate realistic F&O opportunities with single directional bias"""
-    
-    # Get current prices and expiry dates
-    expiry_dates = get_next_expiry_dates()
-    index_data = fetch_current_index_prices()
-    
-    # Stock symbols for F&O
-    url = "https://archives.nseindia.com/content/fo/fo_mktlots.csv"
-    fno_df = pd.read_csv(url)
-    fno_stocks = fno_df['SYMBOL'].dropna().unique().tolist()
-
-    # Fetch NSE's official F&O list
-    fno_df = pd.read_csv("https://archives.nseindia.com/content/fo/fo_mktlots.csv")
-    fno_stocks = fno_df['SYMBOL'].dropna().unique().tolist()
-    
-    stock_data = fetch_stock_prices(fno_stocks)
-    
-    recommendations = []
-    
-    # NIFTY Options (Weekly expiry) - Single direction based on trend
-    nifty_price = index_data['NIFTY']['price']
-    nifty_trend = index_data['NIFTY']['trend']
-    nifty_strikes = get_correct_strike_prices(nifty_price, 'index', num_strikes=3)
-    nifty_expiry_days = (expiry_dates['nifty'] - datetime.now()).days
-    
-    # Choose option type based on trend
-    nifty_option_type = 'CE' if nifty_trend == 'BULLISH' else 'PE'
-    
-    for strike in nifty_strikes:
-        option_data = calculate_option_targets(
-            nifty_price, strike, nifty_option_type, nifty_expiry_days, 'NIFTY', nifty_trend
-        )
-        
-        # Only include high-probability opportunities
-        if option_data['trend_aligned'] and 20 <= option_data['gain_pct'] <= 150:
             
-            if nifty_option_type == 'CE':
-                strategy = f"Bullish on NIFTY (above {nifty_price:.0f})"
-                recommendation = 'BUY CE - Uptrend Play'
+            # Calculate EMA20
+            if len(df) >= 20:
+                candle_data['ema20'] = round(df['Close'].ewm(span=20).mean().iloc[-1], 2)
             else:
-                strategy = f"Bearish on NIFTY (below {nifty_price:.0f})"
-                recommendation = 'BUY PE - Downtrend Play'
+                candle_data['ema20'] = round(df['Close'].mean(), 2)
             
-            recommendations.append({
-                'Index/Stock': 'NIFTY',
-                'Current Price': nifty_price,
-                'Strike': int(strike),
-                'Type': nifty_option_type,
-                'LTP': option_data['current_premium'],
-                'Target': option_data['target_premium'],
-                '% Gain': option_data['gain_pct'],
-                'Days to Expiry': nifty_expiry_days,
-                'Expiry Date': expiry_dates['nifty'].strftime('%d-%b-%Y'),
-                'Moneyness': 'ATM' if abs(option_data['moneyness'] - 1) < 0.02 else ('ITM' if option_data['is_itm'] else 'OTM'),
-                'Strategy': strategy,
-                'Recommendation': recommendation,
-                'Risk Level': 'Medium' if abs(option_data['moneyness'] - 1) < 0.03 else 'High'
-            })
+            return candle_data
+            
+        except Exception as e:
+            logger.error(f"Error fetching data for {symbol}: {e}")
+            return None
     
-    # BANK NIFTY Options (Monthly expiry) - Single direction based on trend
-    banknifty_price = index_data['BANKNIFTY']['price']
-    banknifty_trend = index_data['BANKNIFTY']['trend']
-    banknifty_strikes = get_correct_strike_prices(banknifty_price, 'index', num_strikes=3)
-    banknifty_expiry_days = (expiry_dates['banknifty'] - datetime.now()).days
-    
-    # Choose option type based on trend
-    banknifty_option_type = 'CE' if banknifty_trend == 'BULLISH' else 'PE'
-    
-    for strike in banknifty_strikes:
-        option_data = calculate_option_targets(
-            banknifty_price, strike, banknifty_option_type, banknifty_expiry_days, 'BANKNIFTY', banknifty_trend
-        )
+    def check_reversal_signal(self, symbol: str, candle_data: Dict) -> Tuple[bool, str]:
+        """
+        Check for reversal signal
+        Returns: (has_reversal, direction)
+        """
+        # First time seeing this symbol
+        if symbol not in self.last_candle_color:
+            self.last_candle_color[symbol] = candle_data['prev_color']
         
-        if option_data['trend_aligned'] and 20 <= option_data['gain_pct'] <= 150:
-            
-            if banknifty_option_type == 'CE':
-                strategy = f"Banking sector bullish (above {banknifty_price:.0f})"
-                recommendation = 'BUY CE - Banking Rally'
+        last_color = self.last_candle_color[symbol]
+        current_color = candle_data['color']
+        
+        # Update last color
+        self.last_candle_color[symbol] = current_color
+        
+        # Check for reversal with body confirmation
+        if last_color != current_color and candle_data['has_body']:
+            if current_color == 'GREEN':
+                return True, 'BULLISH'  # Red to Green = Bullish reversal
             else:
-                strategy = f"Banking sector bearish (below {banknifty_price:.0f})"
-                recommendation = 'BUY PE - Banking Weakness'
+                return True, 'BEARISH'  # Green to Red = Bearish reversal
+        
+        return False, 'NONE'
+    
+    def should_exit_position(self, position: Dict, current_candle: Dict) -> Tuple[bool, str]:
+        """Check if position should be exited"""
+        if not position or position['status'] != 'ACTIVE':
+            return False, ''
+        
+        # Check color reversal exit
+        if self.enable_reversal_exit:
+            position_direction = 'BEARISH' if position['option_type'] == 'PE' else 'BULLISH'
+            current_direction = 'BULLISH' if current_candle['color'] == 'GREEN' else 'BEARISH'
             
-            recommendations.append({
-                'Index/Stock': 'BANKNIFTY',
-                'Current Price': banknifty_price,
-                'Strike': int(strike),
-                'Type': banknifty_option_type,
-                'LTP': option_data['current_premium'],
-                'Target': option_data['target_premium'],
-                '% Gain': option_data['gain_pct'],
-                'Days to Expiry': banknifty_expiry_days,
-                'Expiry Date': expiry_dates['banknifty'].strftime('%d-%b-%Y'),
-                'Moneyness': 'ATM' if abs(option_data['moneyness'] - 1) < 0.02 else ('ITM' if option_data['is_itm'] else 'OTM'),
-                'Strategy': strategy,
-                'Recommendation': recommendation,
-                'Risk Level': 'High'  # Bank Nifty is more volatile
-            })
-    
-    # Stock Options (Monthly expiry) - Single direction per stock
-    stock_expiry_days = (expiry_dates['stocks'] - datetime.now()).days
-    
-    for stock in fno_stocks[:3]:  # Limit to top 3 stocks for memory
-        stock_info = stock_data[stock]
-        stock_price = stock_info['price']
-        stock_trend = stock_info['trend']
-        stock_momentum = stock_info['momentum']
+            if position_direction != current_direction and current_candle['has_body']:
+                return True, 'COLOR_REVERSAL'
         
-        # Determine direction based on trend and momentum
-        if stock_trend == 'BULLISH' and stock_momentum > 0.01:
-            option_type = 'CE'
-            strategy = f"{stock} bullish momentum play"
-            recommendation = f'BUY CE - {stock} Upside'
-        elif stock_trend == 'BEARISH' and stock_momentum < -0.01:
-            option_type = 'PE'
-            strategy = f"{stock} bearish breakdown"
-            recommendation = f'BUY PE - {stock} Downside'
-        else:
-            # Skip stocks with unclear direction
-            continue
+        # Check stop loss (monetary)
+        if position['unrealized_pnl'] <= -self.max_loss_per_trade:
+            return True, 'STOP_LOSS'
         
-        stock_strikes = get_correct_strike_prices(stock_price, 'stock', num_strikes=2)
+        # Check profit target
+        if position['unrealized_pnl'] >= self.profit_target:
+            return True, 'PROFIT_TARGET'
         
-        for strike in stock_strikes:
-            option_data = calculate_option_targets(
-                stock_price, strike, option_type, stock_expiry_days, stock, stock_trend
-            )
-            
-            if option_data['trend_aligned'] and 25 <= option_data['gain_pct'] <= 120:
-                
-                recommendations.append({
-                    'Index/Stock': stock,
-                    'Current Price': stock_price,
-                    'Strike': int(strike),
-                    'Type': option_type,
-                    'LTP': option_data['current_premium'],
-                    'Target': option_data['target_premium'],
-                    '% Gain': option_data['gain_pct'],
-                    'Days to Expiry': stock_expiry_days,
-                    'Expiry Date': expiry_dates['stocks'].strftime('%d-%b-%Y'),
-                    'Moneyness': 'ATM' if abs(option_data['moneyness'] - 1) < 0.02 else ('ITM' if option_data['is_itm'] else 'OTM'),
-                    'Strategy': strategy,
-                    'Recommendation': recommendation,
-                    'Risk Level': 'High'
-                })
+        return False, ''
     
-    # Convert to DataFrame and sort by gain potential
-    df = pd.DataFrame(recommendations)
-    if not df.empty:
-        # Sort by Risk Level (Medium first) and then by % Gain
-        df['risk_sort'] = df['Risk Level'].map({'Medium': 0, 'High': 1})
-        df = df.sort_values(['risk_sort', '% Gain'], ascending=[True, False])
-        df = df.drop('risk_sort', axis=1)
-    
-    return df
-
-def get_options_summary(df):
-    """Get summary statistics for options recommendations"""
-    if df.empty:
-        return {}
-    
-    # Count by option type
-    ce_count = len(df[df['Type'] == 'CE'])
-    pe_count = len(df[df['Type'] == 'PE'])
-    
-    # Group by underlying
-    underlying_counts = df['Index/Stock'].value_counts().to_dict()
-    
-    return {
-        'total_opportunities': len(df),
-        'avg_gain_potential': df['% Gain'].mean(),
-        'max_gain_potential': df['% Gain'].max(),
-        'min_gain_potential': df['% Gain'].min(),
-        'ce_count': ce_count,
-        'pe_count': pe_count,
-        'nifty_options': underlying_counts.get('NIFTY', 0),
-        'banknifty_options': underlying_counts.get('BANKNIFTY', 0),
-        'stock_options': len(df[~df['Index/Stock'].isin(['NIFTY', 'BANKNIFTY'])]),
-        'high_risk_count': len(df[df['Risk Level'] == 'High']),
-        'medium_risk_count': len(df[df['Risk Level'] == 'Medium']),
-        'bullish_bias': ce_count > pe_count,
-        'market_view': 'Bullish' if ce_count > pe_count else 'Bearish' if pe_count > ce_count else 'Neutral'
-    }
-
-def validate_option_data(df):
-    """Validate that option data follows Indian market rules"""
-    errors = []
-    
-    for _, row in df.iterrows():
-        # Check strike intervals
-        underlying = row['Index/Stock']
-        strike = row['Strike']
-        current_price = row['Current Price']
-        
-        if underlying == 'NIFTY':
-            if strike % 50 != 0:
-                errors.append(f"NIFTY strike {strike} not in 50-point intervals")
-        elif underlying == 'BANKNIFTY':
-            if strike % 100 != 0:
-                errors.append(f"BANKNIFTY strike {strike} not in 100-point intervals")
-        else:  # Stock options
-            valid_intervals = [5, 10, 20, 50, 100]
-            if not any(strike % interval == 0 for interval in valid_intervals):
-                errors.append(f"{underlying} strike {strike} not in valid intervals")
-        
-        # Check expiry dates
-        expiry_str = row['Expiry Date']
+    def execute_entry(self, symbol: str, signal_direction: str, spot_price: float) -> Optional[Dict]:
+        """Execute option entry trade"""
         try:
-            expiry_date = datetime.strptime(expiry_str, '%d-%b-%Y')
-            if expiry_date.weekday() != 3:  # Not Thursday
-                errors.append(f"{underlying} expiry {expiry_str} not on Thursday")
-        except:
-            errors.append(f"Invalid expiry date format: {expiry_str}")
+            # Check if we already have a position
+            if self.active_position and self.active_position['status'] == 'ACTIVE':
+                logger.warning("Already have an active position. Skipping new entry.")
+                return None
+            
+            # Get market config
+            config = self.get_market_config(symbol)
+            if not config:
+                return None
+            
+            # Determine option type based on signal
+            option_type = 'CE' if signal_direction == 'BULLISH' else 'PE'
+            
+            # Get expiry and strike
+            expiry, days_to_expiry = self.calculate_current_expiry()
+            strike = self.get_atm_strike(spot_price, config['strike_interval'])
+            
+            # Calculate premium
+            premium = self.calculate_option_premium(spot_price, strike, days_to_expiry, option_type)
+            
+            # Create option symbol
+            option_symbol = f"{config['trading_symbol']}{expiry}{strike}{option_type}"
+            
+            # Create position
+            position = {
+                'position_id': f"POS_{datetime.now(self.ist).strftime('%H%M%S')}",
+                'underlying_symbol': symbol,
+                'option_symbol': option_symbol,
+                'option_type': option_type,
+                'strike': strike,
+                'expiry': expiry,
+                'signal_direction': signal_direction,
+                'entry_spot': spot_price,
+                'entry_premium': premium,
+                'current_premium': premium,
+                'entry_time': datetime.now(self.ist),
+                'lot_size': config['lot_size'],
+                'quantity': config['lot_size'],  # 1 lot
+                'investment': premium * config['lot_size'],
+                'unrealized_pnl': 0,
+                'status': 'ACTIVE'
+            }
+            
+            self.active_position = position
+            
+            # Log entry
+            logger.info("="*60)
+            logger.info(f"OPTION POSITION ENTERED - {signal_direction} REVERSAL")
+            logger.info(f"Underlying: {symbol} @ ₹{spot_price:,.2f}")
+            logger.info(f"Option: {option_symbol}")
+            logger.info(f"Premium: ₹{premium} × {config['lot_size']} = ₹{position['investment']:,.2f}")
+            logger.info(f"Max Risk: ₹{self.max_loss_per_trade}")
+            logger.info(f"Target: ₹{self.profit_target}")
+            logger.info("="*60)
+            
+            return position
+            
+        except Exception as e:
+            logger.error(f"Error executing entry: {e}")
+            return None
     
-    return errors
+    def update_position_value(self, position: Dict, current_spot: float) -> float:
+        """Update option premium based on spot movement"""
+        if not position or position['status'] != 'ACTIVE':
+            return 0
+        
+        # Calculate spot movement
+        spot_change = current_spot - position['entry_spot']
+        
+        # Simple delta calculation
+        if position['option_type'] == 'PE':
+            # PUT loses value when spot rises
+            delta = -0.5
+            premium_change = delta * spot_change
+        else:  # CE
+            # CALL gains value when spot rises
+            delta = 0.5
+            premium_change = delta * spot_change
+        
+        # Add time decay (minimal for intraday)
+        hours_elapsed = (datetime.now(self.ist) - position['entry_time']).seconds / 3600
+        time_decay = position['entry_premium'] * 0.02 * (hours_elapsed / 6)  # 2% per 6 hours
+        
+        # Calculate new premium
+        new_premium = position['entry_premium'] + premium_change - time_decay
+        new_premium = max(0.05, round(new_premium * 20) / 20)
+        
+        # Update position
+        position['current_premium'] = new_premium
+        position['unrealized_pnl'] = (new_premium - position['entry_premium']) * position['lot_size']
+        
+        return new_premium
+    
+    def execute_exit(self, position: Dict, exit_reason: str, exit_premium: float = None):
+        """Execute option exit trade"""
+        if not position or position['status'] != 'ACTIVE':
+            return
+        
+        # Use current premium if not specified
+        if exit_premium is None:
+            exit_premium = position['current_premium']
+        
+        # Calculate final P&L
+        pnl = (exit_premium - position['entry_premium']) * position['lot_size']
+        roi = (pnl / position['investment']) * 100
+        
+        # Update position
+        position['status'] = 'CLOSED'
+        position['exit_premium'] = exit_premium
+        position['exit_time'] = datetime.now(self.ist)
+        position['exit_reason'] = exit_reason
+        position['realized_pnl'] = pnl
+        position['roi_percent'] = roi
+        
+        # Update daily P&L
+        self.daily_pnl += pnl
+        
+        # Log exit
+        logger.info("="*60)
+        logger.info(f"POSITION CLOSED - {exit_reason}")
+        logger.info(f"Option: {position['option_symbol']}")
+        logger.info(f"Entry: ₹{position['entry_premium']} → Exit: ₹{exit_premium}")
+        logger.info(f"P&L: ₹{pnl:,.2f} ({roi:.1f}%)")
+        logger.info(f"Duration: {(position['exit_time'] - position['entry_time']).seconds // 60} minutes")
+        logger.info(f"Daily P&L: ₹{self.daily_pnl:,.2f}")
+        logger.info("="*60)
+        
+        # Add to history
+        self.trade_history.append(position.copy())
+        
+        # Clear active position
+        self.active_position = None
+    
+    def run_trading_loop(self, watchlist: List[str]):
+        """Main trading loop"""
+        logger.info("Starting Reversal Options Trading Bot...")
+        logger.info(f"Watchlist: {watchlist}")
+        logger.info(f"Max Loss: ₹{self.max_loss_per_trade} | Target: ₹{self.profit_target}")
+        
+        check_interval = 10  # Check every 10 seconds for quick reversals
+        
+        while True:
+            try:
+                current_time = datetime.now(self.ist)
+                
+                # Market hours check
+                if current_time.time() < time(9, 15) or current_time.time() > time(15, 30):
+                    logger.info(f"Market closed. Time: {current_time.strftime('%H:%M:%S')}")
+                    tm.sleep(60)
+                    continue
+                
+                # Fetch current data
+                logger.info(f"\n[{current_time.strftime('%H:%M:%S')}] Scanning for reversals...")
+                
+                for symbol in watchlist:
+                    candle_data = self.fetch_candle_data(symbol)
+                    if not candle_data:
+                        continue
+                    
+                    # Log current state
+                    logger.info(f"{symbol}: ₹{candle_data['close']:,.2f} ({candle_data['color']}) | "
+                               f"Body: {candle_data['body_percent']}% | EMA: ₹{candle_data['ema20']:,.2f}")
+                    
+                    # Update position value if we have one
+                    if (self.active_position and 
+                        self.active_position['underlying_symbol'] == symbol and
+                        self.active_position['status'] == 'ACTIVE'):
+                        
+                        old_premium = self.active_position['current_premium']
+                        new_premium = self.update_position_value(self.active_position, candle_data['close'])
+                        
+                        logger.info(f"Position Update: {self.active_position['option_symbol']}")
+                        logger.info(f"  Spot: ₹{candle_data['close']:,.2f} (Move: {candle_data['close'] - self.active_position['entry_spot']:.2f})")
+                        logger.info(f"  Premium: ₹{old_premium} → ₹{new_premium}")
+                        logger.info(f"  P&L: ₹{self.active_position['unrealized_pnl']:,.2f}")
+                        
+                        # Check exit conditions
+                        should_exit, exit_reason = self.should_exit_position(self.active_position, candle_data)
+                        if should_exit:
+                            logger.warning(f"Exit signal: {exit_reason}")
+                            self.execute_exit(self.active_position, exit_reason)
+                            continue
+                    
+                    # Check for new reversal signal (only if no active position)
+                    if not self.active_position or self.active_position['status'] != 'ACTIVE':
+                        has_reversal, direction = self.check_reversal_signal(symbol, candle_data)
+                        
+                        if has_reversal:
+                            logger.warning(f"🔄 REVERSAL DETECTED: {symbol} turned {direction}")
+                            self.execute_entry(symbol, direction, candle_data['close'])
+                            break  # Only one position at a time
+                
+                # Show summary
+                if self.active_position and self.active_position['status'] == 'ACTIVE':
+                    logger.info(f"\nActive Position: {self.active_position['option_symbol']} | "
+                               f"P&L: ₹{self.active_position['unrealized_pnl']:,.2f}")
+                else:
+                    logger.info("\nNo active positions. Waiting for reversal signal...")
+                
+                logger.info(f"Daily P&L: ₹{self.daily_pnl:,.2f} | Trades Today: {len(self.trade_history)}")
+                
+                # Wait before next check
+                tm.sleep(check_interval)
+                
+            except KeyboardInterrupt:
+                logger.info("\nShutting down...")
+                if self.active_position and self.active_position['status'] == 'ACTIVE':
+                    self.execute_exit(self.active_position, 'MANUAL_CLOSE')
+                break
+            except Exception as e:
+                logger.error(f"Error in trading loop: {e}")
+                tm.sleep(30)
+
+# Streamlit Dashboard
+def create_dashboard():
+    st.set_page_config(page_title="Reversal Options Trading", layout="wide")
+    
+    st.title("🔄 Reversal Options Trading Bot")
+    st.caption("Trade on candle color reversals with immediate exit on opposite signal")
+    
+    # Initialize bot
+    if 'bot' not in st.session_state:
+        st.session_state.bot = ReversalOptionsTrader()
+    
+    bot = st.session_state.bot
+    
+    # Sidebar
+    with st.sidebar:
+        st.header("⚙️ Settings")
+        
+        # Symbol selection
+        symbol_choice = st.radio(
+            "Select ONE Symbol to Trade",
+            options=['NIFTY', 'BANKNIFTY'],
+            help="Bot trades only one symbol at a time"
+        )
+        
+        selected_symbol = bot.market_specs[symbol_choice]['symbol']
+        
+        # Risk parameters
+        st.divider()
+        st.subheader("Risk Management")
+        
+        bot.max_loss_per_trade = st.number_input(
+            "Max Loss per Trade (₹)",
+            value=1000,
+            min_value=500,
+            max_value=5000,
+            step=500
+        )
+        
+        bot.profit_target = st.number_input(
+            "Profit Target (₹)",
+            value=1500,
+            min_value=500,
+            max_value=5000,
+            step=500
+        )
+        
+        bot.enable_reversal_exit = st.checkbox(
+            "Exit on Color Reversal",
+            value=True,
+            help="Exit position when candle color reverses"
+        )
+        
+        # Controls
+        st.divider()
+        if st.button("▶️ Start Trading", type="primary"):
+            st.success(f"Trading {symbol_choice}! Check console for updates.")
+            # In production, run in thread
+            # bot.run_trading_loop([selected_symbol])
+        
+        if st.button("🛑 Stop Bot"):
+            if bot.active_position and bot.active_position['status'] == 'ACTIVE':
+                bot.execute_exit(bot.active_position, 'MANUAL_STOP')
+            st.info("Bot stopped.")
+    
+    # Main content
+    col1, col2, col3 = st.columns([2, 2, 1])
+    
+    with col1:
+        st.subheader("📊 Current Position")
+        if bot.active_position and bot.active_position['status'] == 'ACTIVE':
+            pos = bot.active_position
+            
+            st.metric("Option", pos['option_symbol'])
+            
+            col1_1, col1_2 = st.columns(2)
+            with col1_1:
+                st.metric(
+                    "Entry Premium",
+                    f"₹{pos['entry_premium']}",
+                    f"Current: ₹{pos['current_premium']}"
+                )
+            with col1_2:
+                pnl_color = "🟢" if pos['unrealized_pnl'] >= 0 else "🔴"
+                st.metric(
+                    "P&L",
+                    f"{pnl_color} ₹{pos['unrealized_pnl']:,.0f}",
+                    f"{(pos['current_premium']/pos['entry_premium']-1)*100:.1f}%"
+                )
+            
+            # Progress bar
+            if pos['unrealized_pnl'] >= 0:
+                progress = min(pos['unrealized_pnl'] / bot.profit_target, 1.0)
+                st.progress(progress)
+                st.caption(f"Progress to target: {progress*100:.0f}%")
+            else:
+                loss_progress = min(abs(pos['unrealized_pnl']) / bot.max_loss_per_trade, 1.0)
+                st.progress(loss_progress)
+                st.caption(f"⚠️ Loss: {loss_progress*100:.0f}% of max")
+        else:
+            st.info("No active position. Waiting for reversal signal...")
+    
+    with col2:
+        st.subheader("📈 Today's Performance")
+        
+        col2_1, col2_2, col2_3 = st.columns(3)
+        with col2_1:
+            st.metric("Daily P&L", f"₹{bot.daily_pnl:,.0f}")
+        with col2_2:
+            st.metric("Trades", len(bot.trade_history))
+        with col2_3:
+            if bot.trade_history:
+                wins = sum(1 for t in bot.trade_history if t['realized_pnl'] > 0)
+                win_rate = (wins / len(bot.trade_history)) * 100
+                st.metric("Win Rate", f"{win_rate:.0f}%")
+            else:
+                st.metric("Win Rate", "0%")
+        
+        # Recent trades
+        if bot.trade_history:
+            st.divider()
+            st.caption("Recent Trades")
+            for trade in bot.trade_history[-3:]:
+                pnl_icon = "✅" if trade['realized_pnl'] > 0 else "❌"
+                st.text(f"{pnl_icon} {trade['option_symbol']}: ₹{trade['realized_pnl']:,.0f} ({trade['exit_reason']})")
+    
+    with col3:
+        st.subheader("📊 Stats")
+        
+        # Calculate stats
+        if bot.trade_history:
+            total_trades = len(bot.trade_history)
+            profitable_trades = sum(1 for t in bot.trade_history if t['realized_pnl'] > 0)
+            avg_win = np.mean([t['realized_pnl'] for t in bot.trade_history if t['realized_pnl'] > 0] or [0])
+            avg_loss = np.mean([t['realized_pnl'] for t in bot.trade_history if t['realized_pnl'] < 0] or [0])
+            
+            st.metric("Avg Win", f"₹{avg_win:,.0f}")
+            st.metric("Avg Loss", f"₹{abs(avg_loss):,.0f}")
+            if avg_loss != 0:
+                st.metric("Risk/Reward", f"{abs(avg_win/avg_loss):.1f}")
+        else:
+            st.info("No trades yet")
+
+if __name__ == "__main__":
+    import sys
+    
+    if len(sys.argv) > 1 and sys.argv[1] == "--ui":
+        create_dashboard()
+    else:
+        # Run bot directly
+        bot = ReversalOptionsTrader()
+        
+        # Choose ONE symbol to trade
+        # Change to '^NSEBANK' for BANKNIFTY
+        watchlist = ['^NSEI']  # Only NIFTY
+        
+        bot.run_trading_loop(watchlist)
