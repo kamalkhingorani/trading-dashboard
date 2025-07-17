@@ -13,7 +13,7 @@ def safe_import_modules():
     modules = {}
     
     try:
-        from indian_stock_logic import get_indian_recommendations, get_indian_market_overview
+        from Indian_stock_logic import get_indian_recommendations, get_indian_market_overview
         modules['indian_stock'] = True
         modules['get_indian_recommendations'] = get_indian_recommendations
         modules['get_indian_market_overview'] = get_indian_market_overview
