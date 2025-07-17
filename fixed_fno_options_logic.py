@@ -504,6 +504,107 @@ def calculate_spot_targets_with_reasoning(current_spot, bias_analysis, option_ty
             'is_fallback': True
         }
 
+def calculate_realistic_premium(spot_price, strike, option_type, days_to_expiry, underlying_type):
+    """Calculate realistic option premium based on actual market conditions"""
+    try:
+        # Calculate intrinsic value
+        if option_type == 'CE':
+            intrinsic_value = max(0, spot_price - strike)
+            moneyness = spot_price / strike
+        else:  # PE
+            intrinsic_value = max(0, strike - spot_price)
+            moneyness = strike / spot_price
+        
+        # Time value calculation (more realistic)
+        time_factor = days_to_expiry / 365.0
+        
+        # Volatility assumptions (based on underlying)
+        if underlying_type == 'index':
+            if spot_price > 40000:  # Bank Nifty
+                implied_vol = 0.18  # 18% volatility
+                base_premium_pct = 0.015  # 1.5% of spot for ATM options
+            else:  # Nifty
+                implied_vol = 0.15  # 15% volatility
+                base_premium_pct = 0.012  # 1.2% of spot for ATM options
+        else:  # Stock
+            implied_vol = 0.25  # 25% volatility for stocks
+            base_premium_pct = 0.02   # 2% of spot for ATM options
+        
+        # Calculate time value based on moneyness
+        if 0.98 <= moneyness <= 1.02:  # ATM options
+            time_value = spot_price * base_premium_pct * np.sqrt(time_factor)
+        elif moneyness > 1.05 or moneyness < 0.95:  # Deep OTM/ITM
+            time_value = spot_price * base_premium_pct * 0.3 * np.sqrt(time_factor)
+        else:  # Near ATM
+            time_value = spot_price * base_premium_pct * 0.7 * np.sqrt(time_factor)
+        
+        # Adjust for very short expiry (time decay)
+        if days_to_expiry <= 3:
+            time_value *= 0.5  # Significant time decay
+        elif days_to_expiry <= 7:
+            time_value *= 0.7
+        
+        # Total premium
+        total_premium = intrinsic_value + time_value
+        
+        # Minimum premium bounds
+        if underlying_type == 'index':
+            min_premium = 5 if spot_price < 25000 else 10
+        else:
+            min_premium = 2
+        
+        # Maximum premium bounds (prevent unrealistic values)
+        max_premium = spot_price * 0.08  # Max 8% of spot price
+        
+        # Apply bounds
+        total_premium = max(min_premium, min(total_premium, max_premium))
+        
+        return round(total_premium, 2)
+        
+    except Exception:
+        # Fallback premium
+        if underlying_type == 'index':
+            return round(spot_price * 0.005, 2)  # 0.5% of spot
+        else:
+            return round(spot_price * 0.01, 2)   # 1% of spot
+
+def calculate_realistic_target(current_premium, spot_move_pct, option_type, days_to_expiry):
+    """Calculate realistic target premium and gain percentage"""
+    try:
+        # Option gain multiplier based on spot movement
+        # Options have leveraged exposure to underlying movement
+        
+        if days_to_expiry <= 3:
+            # Very short expiry - higher leverage but more risk
+            leverage_factor = spot_move_pct * 8  # 8x leverage
+        elif days_to_expiry <= 7:
+            # Short expiry - good leverage
+            leverage_factor = spot_move_pct * 6  # 6x leverage
+        elif days_to_expiry <= 15:
+            # Medium expiry - moderate leverage
+            leverage_factor = spot_move_pct * 4  # 4x leverage
+        else:
+            # Longer expiry - lower leverage due to time decay
+            leverage_factor = spot_move_pct * 3  # 3x leverage
+        
+        # Cap the maximum gain to realistic levels
+        max_gain_pct = min(leverage_factor, 150)  # Max 150% gain
+        min_gain_pct = max(leverage_factor * 0.3, 20)  # Min 20% gain
+        
+        # Random gain within realistic range
+        expected_gain_pct = np.random.uniform(min_gain_pct, max_gain_pct)
+        
+        # Calculate target premium
+        target_premium = current_premium * (1 + expected_gain_pct / 100)
+        
+        return round(target_premium, 2), round(expected_gain_pct, 1)
+        
+    except Exception:
+        # Fallback calculation
+        fallback_gain = 30  # 30% gain
+        target_premium = current_premium * 1.3
+        return round(target_premium, 2), fallback_gain
+
 def estimate_option_premium_enhanced(spot_price, strike, option_type, days_to_expiry, direction, is_fallback=False):
     """Enhanced option premium estimation with fallback tracking"""
     try:
@@ -575,8 +676,9 @@ def generate_fno_opportunities():
             nifty_price, nifty_analysis, 'index', nifty_price
         )
         
-        # NIFTY: Show 2 best opportunities
-        nifty_strikes = get_correct_strike_prices(nifty_price, 'index')[2:4]  # 2 strikes
+        # NIFTY: Show ONLY 1 best opportunity
+        nifty_strikes = get_correct_strike_prices(nifty_price, 'index')
+        atm_strike = nifty_strikes[len(nifty_strikes)//2]  # Get ATM strike only
         
         # Determine option type based on bias
         if nifty_analysis['bias'] == 'Bearish':
@@ -584,49 +686,48 @@ def generate_fno_opportunities():
         else:
             primary_option_type = 'CE'
         
-        for strike in nifty_strikes:
-            option_premium = estimate_option_premium_enhanced(
-                nifty_price, strike, primary_option_type, nifty_expiry_days, 
-                nifty_spot_data['direction'], nifty_analysis['is_fallback']
-            )
+        # Calculate realistic premium
+        option_premium = calculate_realistic_premium(
+            nifty_price, atm_strike, primary_option_type, nifty_expiry_days, 'index'
+        )
+        
+        # Calculate realistic target premium
+        target_premium, gain_pct = calculate_realistic_target(
+            option_premium, nifty_spot_data['target_pct'], primary_option_type, nifty_expiry_days
+        )
+        
+        # Create fallback indicators
+        fallback_notes = []
+        if index_data['fallback_flags'].get('nifty_price'):
+            fallback_notes.append("Price*")
+        if nifty_analysis['is_fallback']:
+            fallback_notes.append("Analysis*")
+        if expiry_dates.get('is_fallback'):
+            fallback_notes.append("Expiry*")
             
-            # Extract numeric value for calculation
-            premium_value = float(str(option_premium).replace('*', ''))
-            target_premium = premium_value * np.random.uniform(1.4, 2.5)
-            gain_pct = ((target_premium - premium_value) / premium_value) * 100
-            
-            # Create fallback indicators
-            fallback_notes = []
-            if index_data['fallback_flags'].get('nifty_price'):
-                fallback_notes.append("Price*")
-            if nifty_analysis['is_fallback']:
-                fallback_notes.append("Analysis*")
-            if expiry_dates.get('is_fallback'):
-                fallback_notes.append("Expiry*")
-                
-            data_quality = "Real Data" if not fallback_notes else f"Mixed Data ({', '.join(fallback_notes)})"
-            
-            recommendations.append({
-                'Underlying': 'NIFTY',
-                'Current Spot': nifty_price,
-                'Spot Target': nifty_spot_data['spot_target'],
-                'Spot SL': nifty_spot_data['spot_sl'],
-                'Spot Move %': f"{nifty_spot_data['target_pct']:.1f}%",
-                'Strike': int(strike),
-                'Option Type': primary_option_type,
-                'Premium (LTP)': option_premium,
-                'Target Premium': round(target_premium, 2),
-                'Option Gain %': round(gain_pct, 1),
-                'Days to Expiry': nifty_expiry_days,
-                'Expiry Date': expiry_dates['nifty'].strftime('%d-%b-%Y'),
-                'Selection Reason': nifty_spot_data['reasoning'],
-                'Technical Bias': nifty_analysis['bias'],
-                'Bias Strength': nifty_analysis['strength'],
-                'Direction': nifty_spot_data['direction'],
-                'Strategy': f"NIFTY {primary_option_type} - {nifty_analysis['bias']} Setup",
-                'Risk Level': 'Medium',
-                'Data Quality': data_quality
-            })
+        data_quality = "Real Data" if not fallback_notes else f"Mixed Data ({', '.join(fallback_notes)})"
+        
+        recommendations.append({
+            'Underlying': 'NIFTY',
+            'Current Spot': nifty_price,
+            'Spot Target': nifty_spot_data['spot_target'],
+            'Spot SL': nifty_spot_data['spot_sl'],
+            'Spot Move %': f"{nifty_spot_data['target_pct']:.1f}%",
+            'Strike': int(atm_strike),
+            'Option Type': primary_option_type,
+            'Premium (LTP)': option_premium,
+            'Target Premium': target_premium,
+            'Option Gain %': gain_pct,
+            'Days to Expiry': nifty_expiry_days,
+            'Expiry Date': expiry_dates['nifty'].strftime('%d-%b-%Y'),
+            'Selection Reason': nifty_spot_data['reasoning'],
+            'Technical Bias': nifty_analysis['bias'],
+            'Bias Strength': nifty_analysis['strength'],
+            'Direction': nifty_spot_data['direction'],
+            'Strategy': f"NIFTY {primary_option_type} - {nifty_analysis['bias']} Setup",
+            'Risk Level': 'Medium',
+            'Data Quality': data_quality
+        })
         
         # === BANKNIFTY OPTIONS ===
         banknifty_price = index_data['BANKNIFTY']
@@ -637,54 +738,55 @@ def generate_fno_opportunities():
             banknifty_price, banknifty_analysis, 'index', banknifty_price
         )
         
-        # BANKNIFTY: Show 2 best opportunities
-        banknifty_strikes = get_correct_strike_prices(banknifty_price, 'index')[2:4]
+        # BANKNIFTY: Show ONLY 1 best opportunity
+        banknifty_strikes = get_correct_strike_prices(banknifty_price, 'index')
+        atm_strike = banknifty_strikes[len(banknifty_strikes)//2]  # Get ATM strike only
         
         if banknifty_analysis['bias'] == 'Bearish':
             primary_option_type = 'PE'
         else:
             primary_option_type = 'CE'
         
-        for strike in banknifty_strikes:
-            option_premium = estimate_option_premium_enhanced(
-                banknifty_price, strike, primary_option_type, banknifty_expiry_days, 
-                banknifty_spot_data['direction'], banknifty_analysis['is_fallback']
-            )
+        # Calculate realistic premium
+        option_premium = calculate_realistic_premium(
+            banknifty_price, atm_strike, primary_option_type, banknifty_expiry_days, 'index'
+        )
+        
+        # Calculate realistic target premium
+        target_premium, gain_pct = calculate_realistic_target(
+            option_premium, banknifty_spot_data['target_pct'], primary_option_type, banknifty_expiry_days
+        )
+        
+        # Fallback tracking
+        fallback_notes = []
+        if index_data['fallback_flags'].get('banknifty_price'):
+            fallback_notes.append("Price*")
+        if banknifty_analysis['is_fallback']:
+            fallback_notes.append("Analysis*")
             
-            premium_value = float(str(option_premium).replace('*', ''))
-            target_premium = premium_value * np.random.uniform(1.5, 3.0)
-            gain_pct = ((target_premium - premium_value) / premium_value) * 100
-            
-            # Fallback tracking
-            fallback_notes = []
-            if index_data['fallback_flags'].get('banknifty_price'):
-                fallback_notes.append("Price*")
-            if banknifty_analysis['is_fallback']:
-                fallback_notes.append("Analysis*")
-                
-            data_quality = "Real Data" if not fallback_notes else f"Mixed Data ({', '.join(fallback_notes)})"
-            
-            recommendations.append({
-                'Underlying': 'BANKNIFTY',
-                'Current Spot': banknifty_price,
-                'Spot Target': banknifty_spot_data['spot_target'],
-                'Spot SL': banknifty_spot_data['spot_sl'],
-                'Spot Move %': f"{banknifty_spot_data['target_pct']:.1f}%",
-                'Strike': int(strike),
-                'Option Type': primary_option_type,
-                'Premium (LTP)': option_premium,
-                'Target Premium': round(target_premium, 2),
-                'Option Gain %': round(gain_pct, 1),
-                'Days to Expiry': banknifty_expiry_days,
-                'Expiry Date': expiry_dates['banknifty'].strftime('%d-%b-%Y'),
-                'Selection Reason': banknifty_spot_data['reasoning'],
-                'Technical Bias': banknifty_analysis['bias'],
-                'Bias Strength': banknifty_analysis['strength'],
-                'Direction': banknifty_spot_data['direction'],
-                'Strategy': f"BANKNIFTY {primary_option_type} - Banking {banknifty_analysis['bias']}",
-                'Risk Level': 'High',
-                'Data Quality': data_quality
-            })
+        data_quality = "Real Data" if not fallback_notes else f"Mixed Data ({', '.join(fallback_notes)})"
+        
+        recommendations.append({
+            'Underlying': 'BANKNIFTY',
+            'Current Spot': banknifty_price,
+            'Spot Target': banknifty_spot_data['spot_target'],
+            'Spot SL': banknifty_spot_data['spot_sl'],
+            'Spot Move %': f"{banknifty_spot_data['target_pct']:.1f}%",
+            'Strike': int(atm_strike),
+            'Option Type': primary_option_type,
+            'Premium (LTP)': option_premium,
+            'Target Premium': target_premium,
+            'Option Gain %': gain_pct,
+            'Days to Expiry': banknifty_expiry_days,
+            'Expiry Date': expiry_dates['banknifty'].strftime('%d-%b-%Y'),
+            'Selection Reason': banknifty_spot_data['reasoning'],
+            'Technical Bias': banknifty_analysis['bias'],
+            'Bias Strength': banknifty_analysis['strength'],
+            'Direction': banknifty_spot_data['direction'],
+            'Strategy': f"BANKNIFTY {primary_option_type} - Banking {banknifty_analysis['bias']}",
+            'Risk Level': 'High',
+            'Data Quality': data_quality
+        })
         
         # === STOCK OPTIONS ===
         stock_expiry_days = (expiry_dates['stocks'] - datetime.now()).days
@@ -718,17 +820,18 @@ def generate_fno_opportunities():
                 else:
                     option_type = 'CE'
                 
-                option_premium = estimate_option_premium_enhanced(
-                    stock_price, best_strike, option_type, stock_expiry_days, 
-                    spot_data['direction'], bias_analysis['is_fallback']
+                # Calculate realistic premium for stock option
+                option_premium = calculate_realistic_premium(
+                    stock_price, best_strike, option_type, stock_expiry_days, 'stock'
                 )
                 
-                premium_value = float(str(option_premium).replace('*', ''))
-                target_premium = premium_value * np.random.uniform(1.6, 3.5)
-                gain_pct = ((target_premium - premium_value) / premium_value) * 100
+                # Calculate realistic target premium
+                target_premium, gain_pct = calculate_realistic_target(
+                    option_premium, spot_data['target_pct'], option_type, stock_expiry_days
+                )
                 
-                # Check gain potential
-                if 25 <= gain_pct <= 250:
+                # Check gain potential (realistic range)
+                if 20 <= gain_pct <= 200:
                     
                     # Fallback tracking
                     fallback_notes = []
@@ -750,8 +853,8 @@ def generate_fno_opportunities():
                         'Strike': int(best_strike),
                         'Option Type': option_type,
                         'Premium (LTP)': option_premium,
-                        'Target Premium': round(target_premium, 2),
-                        'Option Gain %': round(gain_pct, 1),
+                        'Target Premium': target_premium,
+                        'Option Gain %': gain_pct,
                         'Days to Expiry': stock_expiry_days,
                         'Expiry Date': expiry_dates['stocks'].strftime('%d-%b-%Y'),
                         'Selection Reason': spot_data['reasoning'],
