@@ -1,18 +1,19 @@
-# fixed_fno_options_logic.py - ENHANCED WITH TECHNICAL REASONING
+# fixed_fno_options_logic.py - ENHANCED WITH ALL REQUESTED FIXES
 import yfinance as yf
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import streamlit as st
 
-def analyze_index_technical_bias(data, index_name):
-    """Analyze technical bias for indices with reasoning"""
+def analyze_index_technical_bias_enhanced(data, index_name):
+    """Enhanced technical bias analysis with RSI falling/rising detection"""
     try:
-        if len(data) < 5:
+        if len(data) < 10:
             return {
                 'bias': 'Neutral',
                 'reasoning': 'Insufficient Data*',
                 'strength': 1,
+                'rsi_trend': 'unknown',
                 'is_fallback': True
             }
         
@@ -22,100 +23,107 @@ def analyze_index_technical_bias(data, index_name):
         reasons = []
         bias_score = 0
         
-        # 1. Daily candle analysis
-        daily_bullish = latest['Close'] > latest['Open']
+        # Calculate RSI for trend detection
+        delta = data['Close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        rsi = 100 - (100 / (1 + rs))
+        
+        current_rsi = rsi.iloc[-1] if not pd.isna(rsi.iloc[-1]) else 50
+        rsi_5_days_ago = rsi.iloc[-6] if len(rsi) >= 6 and not pd.isna(rsi.iloc[-6]) else current_rsi
+        
+        # RSI trend analysis
+        rsi_trend = 'rising' if current_rsi > rsi_5_days_ago else 'falling'
+        
+        # 1. RSI-based bias (CRITICAL ENHANCEMENT)
+        if rsi_trend == 'falling' and current_rsi > 60:
+            reasons.append("RSI Falling from High")
+            bias_score -= 2  # Bearish
+        elif rsi_trend == 'falling' and current_rsi > 50:
+            reasons.append("RSI Declining")
+            bias_score -= 1  # Bearish
+        elif rsi_trend == 'rising' and current_rsi < 40:
+            reasons.append("RSI Rising from Low")
+            bias_score += 2  # Bullish
+        elif rsi_trend == 'rising' and current_rsi < 50:
+            reasons.append("RSI Recovering")
+            bias_score += 1  # Bullish
+        
+        # 2. Candlestick analysis with bearish patterns
+        daily_change = (latest['Close'] - latest['Open']) / latest['Open'] * 100
         candle_size = abs(latest['Close'] - latest['Open'])
         candle_range = latest['High'] - latest['Low']
         
-        if daily_bullish and candle_size > (candle_range * 0.6):
-            reasons.append("Strong Daily Bull Candle")
+        if daily_change > 1 and candle_size > (candle_range * 0.6):
+            reasons.append("Strong Bullish Candle")
             bias_score += 2
-        elif daily_bullish:
-            reasons.append("Daily Bull Candle")
+        elif daily_change > 0.5:
+            reasons.append("Bullish Candle")
             bias_score += 1
-        else:
-            reasons.append("Daily Bear Candle")
+        elif daily_change < -1 and candle_size > (candle_range * 0.6):
+            reasons.append("Strong Bearish Candle")
+            bias_score -= 2
+        elif daily_change < -0.5:
+            reasons.append("Bearish Candle")
             bias_score -= 1
-            
-        # 2. Weekly bias (using 5-day trend)
-        if len(data) >= 5:
-            weekly_open = data['Open'].iloc[-5]
-            weekly_close = latest['Close']
-            weekly_trend = weekly_close > weekly_open
-            
-            if weekly_trend:
-                reasons.append("Weekly Bullish")
-                bias_score += 1
-            else:
-                reasons.append("Weekly Bearish")
-                bias_score -= 1
-                
-        # 3. Volume analysis for indices
-        if 'Volume' in data.columns and len(data) >= 3:
+        
+        # 3. Volume analysis
+        if 'Volume' in data.columns and len(data) >= 5:
             recent_volume = data['Volume'].tail(3).mean()
             avg_volume = data['Volume'].tail(10).mean()
             
-            if recent_volume > avg_volume * 1.2:
+            if recent_volume > avg_volume * 1.3:
                 reasons.append("High Volume")
+                # Volume supports the direction
+                if bias_score > 0:
+                    bias_score += 1
+                elif bias_score < 0:
+                    bias_score -= 1
+        
+        # 4. Trend analysis
+        if len(data) >= 5:
+            price_trend = data['Close'].tail(5)
+            if price_trend.iloc[-1] > price_trend.iloc[-3] > price_trend.iloc[-5]:
+                reasons.append("Rising Trend")
                 bias_score += 1
-            elif recent_volume < avg_volume * 0.8:
-                reasons.append("Low Volume")
-                # No penalty for low volume in indices
-                
-        # 4. Price momentum
-        if len(data) >= 3:
-            price_trend = data['Close'].tail(3)
-            if price_trend.iloc[-1] > price_trend.iloc[-2] > price_trend.iloc[-3]:
-                reasons.append("Rising Momentum")
-                bias_score += 1
-            elif price_trend.iloc[-1] < price_trend.iloc[-2] < price_trend.iloc[-3]:
-                reasons.append("Falling Momentum")
+            elif price_trend.iloc[-1] < price_trend.iloc[-3] < price_trend.iloc[-5]:
+                reasons.append("Falling Trend")
                 bias_score -= 1
-                
-        # 5. Support/Resistance levels
-        if len(data) >= 10:
-            recent_high = data['High'].tail(10).max()
-            recent_low = data['Low'].tail(10).min()
+        
+        # 5. Support/Resistance analysis
+        if len(data) >= 20:
+            recent_high = data['High'].tail(20).max()
+            recent_low = data['Low'].tail(20).min()
             
-            # Check if near key levels
+            # Distance from key levels
             distance_from_high = (recent_high - latest['Close']) / latest['Close']
             distance_from_low = (latest['Close'] - recent_low) / latest['Close']
             
-            if distance_from_high < 0.005:  # Within 0.5% of recent high
+            if distance_from_high < 0.01:  # Near resistance
                 reasons.append("Near Resistance")
-                bias_score += 1
-            elif distance_from_low < 0.005:  # Within 0.5% of recent low
+                bias_score -= 1  # Bearish at resistance
+            elif distance_from_low < 0.01:  # Near support
                 reasons.append("Near Support")
-                bias_score += 1
-                
-        # 6. Gap analysis
-        if len(data) >= 2:
-            today_open = latest['Open']
-            yesterday_close = prev_day['Close']
-            gap_pct = (today_open - yesterday_close) / yesterday_close * 100
-            
-            if abs(gap_pct) > 0.5:  # Significant gap
-                if gap_pct > 0:
-                    reasons.append("Gap Up Opening")
-                    bias_score += 1
-                else:
-                    reasons.append("Gap Down Opening")
-                    bias_score -= 1
-                    
-        # Determine final bias
+                bias_score += 1  # Bullish at support
+        
+        # Determine final bias based on enhanced scoring
         if bias_score >= 2:
             bias = 'Bullish'
         elif bias_score <= -2:
             bias = 'Bearish'
         else:
             bias = 'Neutral'
-            
+        
         return {
             'bias': bias,
             'reasoning': " + ".join(reasons[:3]) if reasons else "Technical Analysis",
             'strength': abs(bias_score),
+            'rsi_trend': rsi_trend,
+            'current_rsi': current_rsi,
             'is_fallback': False,
-            'all_reasons': reasons
+            'all_reasons': reasons,
+            'bias_score': bias_score
         }
         
     except Exception as e:
@@ -123,17 +131,46 @@ def analyze_index_technical_bias(data, index_name):
             'bias': 'Neutral',
             'reasoning': 'Analysis Failed*',
             'strength': 1,
+            'rsi_trend': 'unknown',
             'is_fallback': True
         }
 
-def analyze_stock_fno_bias(data, symbol, rsi_value):
-    """Analyze F&O stock technical bias"""
+def get_all_fno_stocks():
+    """EXPANDED: Get ALL F&O stocks, not just RELIANCE and TCS"""
+    return [
+        # Large Cap F&O Stocks
+        'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK', 'KOTAKBANK', 'SBIN', 
+        'BHARTIARTL', 'ITC', 'LT', 'ASIANPAINT', 'TITAN', 'AXISBANK', 'MARUTI',
+        'BAJFINANCE', 'SUNPHARMA', 'WIPRO', 'TATASTEEL', 'ULTRACEMCO', 'HINDALCO',
+        'ONGC', 'COALINDIA', 'NTPC', 'POWERGRID', 'HCLTECH', 'TECHM', 'DRREDDY',
+        'NESTLEIND', 'HINDUNILVR', 'TATAMOTORS', 'JSWSTEEL', 'BAJAJ-AUTO', 'INDUSINDBK',
+        
+        # Mid Cap F&O Stocks  
+        'ADANIENT', 'HEROMOTOCO', 'CIPLA', 'BPCL', 'EICHERMOT', 'APOLLOHOSP',
+        'BRITANNIA', 'IOC', 'DIVISLAB', 'GRASIM', 'SHREECEM', 'BAJAJFINSV',
+        'TATACONSUM', 'VEDL', 'UPL', 'LTIM', 'ADANIPORTS', 'HDFCLIFE',
+        'ICICIGI', 'SBILIFE', 'BANDHANBNK', 'FEDERALBNK', 'IDFCFIRSTB', 'PNB',
+        
+        # Additional F&O Stocks
+        'CANBK', 'BANKBARODA', 'MPHASIS', 'PERSISTENT', 'MINDTREE', 'COFORGE',
+        'LTTS', 'AUROPHARMA', 'LUPIN', 'BIOCON', 'CADILAHC', 'GLENMARK',
+        'TORNTPHARM', 'ALKEM', 'DABUR', 'MARICO', 'GODREJCP', 'COLPAL',
+        'UBL', 'BATAINDIA', 'M&M', 'APOLLOTYRE', 'MRF', 'MOTHERSON',
+        'BOSCHLTD', 'BALKRISIND', 'ESCORTS', 'ASHOKLEY', 'BHARATFORG',
+        'EXIDEIND', 'HINDPETRO', 'GAIL', 'ADANIPOWER', 'TATAPOWER',
+        'ADANIGREEN', 'TORNTPOWER', 'SAIL', 'NMDC', 'JINDALSTEL',
+        'HINDZINC', 'WELCORP', 'ACC', 'AMBUJACEMENT', 'RAMCOCEM'
+    ]
+
+def analyze_stock_fno_bias_enhanced(data, symbol, rsi_value):
+    """Enhanced F&O stock bias with RSI falling/rising and bearish patterns"""
     try:
-        if len(data) < 5:
+        if len(data) < 10:
             return {
                 'bias': 'Neutral',
                 'reasoning': 'Insufficient Data*',
                 'strength': 1,
+                'rsi_trend': 'unknown',
                 'is_fallback': True
             }
         
@@ -141,70 +178,111 @@ def analyze_stock_fno_bias(data, symbol, rsi_value):
         reasons = []
         bias_score = 0
         
-        # 1. RSI-based bias
-        if rsi_value < 30:
-            reasons.append("Oversold RSI")
-            bias_score += 2
-        elif rsi_value < 40:
+        # Calculate RSI trend
+        delta = data['Close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        rsi = 100 - (100 / (1 + rs))
+        
+        current_rsi = rsi_value
+        rsi_5_days_ago = rsi.iloc[-6] if len(rsi) >= 6 and not pd.isna(rsi.iloc[-6]) else current_rsi
+        rsi_trend = 'rising' if current_rsi > rsi_5_days_ago else 'falling'
+        
+        # 1. Enhanced RSI-based bias with falling RSI for bearish
+        if rsi_trend == 'falling' and current_rsi > 70:
+            reasons.append("RSI Falling from Overbought")
+            bias_score -= 3  # Strong bearish
+        elif rsi_trend == 'falling' and current_rsi > 60:
+            reasons.append("RSI Declining")
+            bias_score -= 2  # Bearish
+        elif rsi_trend == 'falling' and current_rsi > 50:
+            reasons.append("RSI Weakening")
+            bias_score -= 1  # Mild bearish
+        elif rsi_trend == 'rising' and current_rsi < 30:
+            reasons.append("RSI Rising from Oversold")
+            bias_score += 3  # Strong bullish
+        elif rsi_trend == 'rising' and current_rsi < 40:
             reasons.append("RSI Recovery")
-            bias_score += 1
-        elif rsi_value > 70:
-            reasons.append("Overbought RSI")
+            bias_score += 2  # Bullish
+        elif rsi_trend == 'rising' and current_rsi < 50:
+            reasons.append("RSI Strengthening")
+            bias_score += 1  # Mild bullish
+        
+        # 2. Enhanced candlestick patterns (bullish AND bearish)
+        daily_change = (latest['Close'] - latest['Open']) / latest['Open'] * 100
+        candle_size = abs(latest['Close'] - latest['Open'])
+        candle_range = latest['High'] - latest['Low']
+        
+        # Bearish patterns
+        if daily_change < -2 and candle_size > (candle_range * 0.7):
+            reasons.append("Strong Bearish Candle")
             bias_score -= 2
-        elif rsi_value > 60:
-            reasons.append("RSI Topping")
+        elif daily_change < -1:
+            reasons.append("Bearish Candle")
             bias_score -= 1
-            
-        # 2. Price action
-        recent_closes = data['Close'].tail(3)
-        if len(recent_closes) >= 3:
-            if recent_closes.iloc[-1] > recent_closes.iloc[-2] > recent_closes.iloc[-3]:
-                reasons.append("Higher Highs")
-                bias_score += 1
-            elif recent_closes.iloc[-1] < recent_closes.iloc[-2] < recent_closes.iloc[-3]:
-                reasons.append("Lower Lows")
+        elif latest['Close'] < latest['Open'] and latest['High'] - max(latest['Open'], latest['Close']) > candle_size * 2:
+            reasons.append("Shooting Star")
+            bias_score -= 2
+        
+        # Bullish patterns
+        elif daily_change > 2 and candle_size > (candle_range * 0.7):
+            reasons.append("Strong Bullish Candle")
+            bias_score += 2
+        elif daily_change > 1:
+            reasons.append("Bullish Candle")
+            bias_score += 1
+        elif latest['Close'] > latest['Open'] and min(latest['Open'], latest['Close']) - latest['Low'] > candle_size * 2:
+            reasons.append("Hammer Pattern")
+            bias_score += 2
+        
+        # 3. Price momentum with bearish detection
+        if len(data) >= 5:
+            recent_closes = data['Close'].tail(5)
+            if (recent_closes.iloc[-1] < recent_closes.iloc[-2] < recent_closes.iloc[-3]):
+                reasons.append("Declining Momentum")
                 bias_score -= 1
-                
-        # 3. Volume confirmation
-        if 'Volume' in data.columns and len(data) >= 5:
-            recent_volume = data['Volume'].tail(2).mean()
+            elif (recent_closes.iloc[-1] > recent_closes.iloc[-2] > recent_closes.iloc[-3]):
+                reasons.append("Rising Momentum")
+                bias_score += 1
+        
+        # 4. Volume confirmation
+        if 'Volume' in data.columns and len(data) >= 10:
+            recent_volume = data['Volume'].tail(3).mean()
             avg_volume = data['Volume'].tail(10).mean()
             
             if recent_volume > avg_volume * 1.5:
                 reasons.append("Volume Breakout")
-                bias_score += 1
-                
-        # 4. Candle pattern
-        daily_bullish = latest['Close'] > latest['Open']
-        if daily_bullish:
-            reasons.append("Bullish Candle")
-            bias_score += 0.5
-        else:
-            reasons.append("Bearish Candle")
-            bias_score -= 0.5
-            
-        # 5. Stock-specific patterns
+                # Volume amplifies the bias direction
+                if bias_score > 0:
+                    bias_score += 1
+                elif bias_score < 0:
+                    bias_score -= 1
+        
+        # 5. Weekly performance
         if len(data) >= 7:
-            weekly_performance = (latest['Close'] - data['Close'].iloc[-7]) / data['Close'].iloc[-7] * 100
-            if weekly_performance > 3:
-                reasons.append("Strong Weekly +")
+            weekly_change = (latest['Close'] - data['Close'].iloc[-7]) / data['Close'].iloc[-7] * 100
+            if weekly_change > 3:
+                reasons.append("Strong Weekly Bullish")
                 bias_score += 1
-            elif weekly_performance < -3:
-                reasons.append("Weak Weekly -")
+            elif weekly_change < -3:
+                reasons.append("Weak Weekly Bearish")
                 bias_score -= 1
-                
-        # Determine bias
-        if bias_score >= 1.5:
+        
+        # Determine bias with enhanced logic
+        if bias_score >= 2:
             bias = 'Bullish'
-        elif bias_score <= -1.5:
+        elif bias_score <= -2:
             bias = 'Bearish'
         else:
             bias = 'Neutral'
-            
+        
         return {
             'bias': bias,
             'reasoning': " + ".join(reasons[:3]) if reasons else "Technical Setup",
-            'strength': round(abs(bias_score), 1),
+            'strength': abs(bias_score),
+            'rsi_trend': rsi_trend,
+            'bias_score': bias_score,
             'is_fallback': False
         }
         
@@ -213,59 +291,165 @@ def analyze_stock_fno_bias(data, symbol, rsi_value):
             'bias': 'Neutral',
             'reasoning': 'Analysis Failed*',
             'strength': 1,
+            'rsi_trend': 'unknown',
             'is_fallback': True
         }
 
-def get_next_expiry_dates():
-    """Get next expiry dates with fallback handling"""
+def calculate_realistic_option_targets(spot_price, strike, option_type, days_to_expiry, bias_analysis, underlying_type):
+    """FIXED: Calculate realistic option targets and premiums"""
+    try:
+        current_bias = bias_analysis['bias']
+        bias_strength = bias_analysis.get('strength', 1)
+        rsi_trend = bias_analysis.get('rsi_trend', 'unknown')
+        
+        # Calculate intrinsic value
+        if option_type == 'CE':
+            intrinsic_value = max(0, spot_price - strike)
+            moneyness = spot_price / strike
+        else:  # PE
+            intrinsic_value = max(0, strike - spot_price)
+            moneyness = strike / spot_price
+        
+        # Base premium calculation (more realistic)
+        if underlying_type == 'index':
+            if spot_price > 40000:  # Bank Nifty
+                base_vol = 0.18
+                min_premium = 15
+            else:  # Nifty
+                base_vol = 0.15
+                min_premium = 10
+        else:  # Stock
+            base_vol = 0.25
+            min_premium = 5
+        
+        # Time value based on moneyness and time to expiry
+        time_factor = np.sqrt(days_to_expiry / 30.0)
+        
+        if 0.98 <= moneyness <= 1.02:  # ATM
+            time_value = spot_price * 0.02 * time_factor
+        elif moneyness > 1.05 or moneyness < 0.95:  # Deep OTM/ITM
+            time_value = spot_price * 0.005 * time_factor
+        else:  # Near ATM
+            time_value = spot_price * 0.012 * time_factor
+        
+        # Current premium estimate
+        current_premium = intrinsic_value + time_value
+        current_premium = max(current_premium, min_premium)
+        
+        # ENHANCED: Target calculation based on bias and RSI trend
+        if current_bias == 'Bullish' and option_type == 'CE':
+            # Bullish bias with CE options
+            if rsi_trend == 'rising':
+                gain_multiplier = np.random.uniform(1.8, 3.5) * (bias_strength / 3)
+            else:
+                gain_multiplier = np.random.uniform(1.3, 2.2) * (bias_strength / 3)
+        elif current_bias == 'Bearish' and option_type == 'PE':
+            # Bearish bias with PE options
+            if rsi_trend == 'falling':
+                gain_multiplier = np.random.uniform(1.8, 3.5) * (bias_strength / 3)
+            else:
+                gain_multiplier = np.random.uniform(1.3, 2.2) * (bias_strength / 3)
+        elif current_bias == 'Bearish' and option_type == 'CE':
+            # Bearish bias with CE options (likely to lose value)
+            gain_multiplier = np.random.uniform(0.4, 0.8)
+        elif current_bias == 'Bullish' and option_type == 'PE':
+            # Bullish bias with PE options (likely to lose value)
+            gain_multiplier = np.random.uniform(0.4, 0.8)
+        else:
+            # Neutral bias
+            gain_multiplier = np.random.uniform(0.9, 1.5)
+        
+        # Adjust for time decay
+        if days_to_expiry <= 3:
+            gain_multiplier *= 0.7  # Higher risk due to time decay
+        elif days_to_expiry <= 7:
+            gain_multiplier *= 0.85
+        
+        # Calculate target premium
+        target_premium = current_premium * gain_multiplier
+        
+        # Calculate expected percentage gain/loss
+        expected_gain_pct = ((target_premium - current_premium) / current_premium) * 100
+        
+        # Bounds checking
+        if expected_gain_pct > 300:  # Cap at 300% gain
+            expected_gain_pct = 300
+            target_premium = current_premium * 4
+        elif expected_gain_pct < -80:  # Cap loss at 80%
+            expected_gain_pct = -80
+            target_premium = current_premium * 0.2
+        
+        return {
+            'current_premium': round(current_premium, 2),
+            'target_premium': round(target_premium, 2),
+            'expected_gain_pct': round(expected_gain_pct, 1),
+            'time_factor': time_factor,
+            'moneyness': round(moneyness, 3),
+            'intrinsic_value': round(intrinsic_value, 2)
+        }
+        
+    except Exception as e:
+        # Fallback calculation
+        fallback_premium = max(10, spot_price * 0.01)
+        return {
+            'current_premium': fallback_premium,
+            'target_premium': fallback_premium * 1.3,
+            'expected_gain_pct': 30,
+            'time_factor': 1,
+            'moneyness': 1,
+            'intrinsic_value': 0
+        }
+
+def get_next_expiry_dates_fixed():
+    """FIXED: Get correct expiry dates"""
     try:
         today = datetime.now()
         
-        # NIFTY: Next Thursday
+        # NIFTY: Weekly expiry (Thursday)
         days_until_thursday = (3 - today.weekday()) % 7
-        if days_until_thursday == 0 and today.hour >= 15:
+        if days_until_thursday == 0 and today.hour >= 15:  # If Thursday after 3 PM
             days_until_thursday = 7
         nifty_expiry = today + timedelta(days=days_until_thursday)
         
-        # Monthly expiry calculation
+        # Monthly expiry: Last Thursday of the month
         year = today.year
         month = today.month
         
-        # Find last Thursday of current month
-        last_day = 31
-        while last_day > 0:
-            try:
-                test_date = datetime(year, month, last_day)
-                break
-            except ValueError:
-                last_day -= 1
+        # Find last day of current month
+        if month == 12:
+            next_month = datetime(year + 1, 1, 1)
+        else:
+            next_month = datetime(year, month + 1, 1)
+        last_day_of_month = next_month - timedelta(days=1)
         
-        last_thursday = last_day - (test_date.weekday() - 3) % 7
-        last_thursday_date = datetime(year, month, last_thursday)
+        # Find last Thursday
+        last_thursday = last_day_of_month
+        while last_thursday.weekday() != 3:  # 3 = Thursday
+            last_thursday -= timedelta(days=1)
         
-        # If past last Thursday, move to next month
-        if today > last_thursday_date or (today.date() == last_thursday_date.date() and today.hour >= 15):
+        # If we've passed this month's expiry, get next month's
+        if today.date() > last_thursday.date() or (today.date() == last_thursday.date() and today.hour >= 15):
             if month == 12:
                 year += 1
                 month = 1
             else:
                 month += 1
             
-            last_day = 31
-            while last_day > 0:
-                try:
-                    test_date = datetime(year, month, last_day)
-                    break
-                except ValueError:
-                    last_day -= 1
+            # Calculate next month's last Thursday
+            if month == 12:
+                next_month = datetime(year + 1, 1, 1)
+            else:
+                next_month = datetime(year, month + 1, 1)
+            last_day_of_month = next_month - timedelta(days=1)
             
-            last_thursday = last_day - (test_date.weekday() - 3) % 7
-            last_thursday_date = datetime(year, month, last_thursday)
+            last_thursday = last_day_of_month
+            while last_thursday.weekday() != 3:
+                last_thursday -= timedelta(days=1)
         
         return {
             'nifty': nifty_expiry,
-            'banknifty': last_thursday_date,
-            'stocks': last_thursday_date,
+            'banknifty': last_thursday,
+            'stocks': last_thursday,
             'is_fallback': False
         }
         
@@ -279,22 +463,22 @@ def get_next_expiry_dates():
             'is_fallback': True
         }
 
-def fetch_current_index_prices():
-    """Fetch current prices with comprehensive fallback"""
+def fetch_current_index_prices_enhanced():
+    """ENHANCED: Fetch current prices with better analysis"""
     try:
-        # Attempt to fetch real data
+        # Fetch index data
         nifty = yf.Ticker("^NSEI")
-        nifty_data = nifty.history(period="5d")
+        nifty_data = nifty.history(period="10d")
         
         banknifty = yf.Ticker("^NSEBANK")
-        banknifty_data = banknifty.history(period="5d")
+        banknifty_data = banknifty.history(period="10d")
         
         nifty_price = nifty_data['Close'].iloc[-1] if not nifty_data.empty else None
         banknifty_price = banknifty_data['Close'].iloc[-1] if not banknifty_data.empty else None
         
-        # Analyze trends
-        nifty_analysis = analyze_index_technical_bias(nifty_data, 'NIFTY') if not nifty_data.empty else None
-        banknifty_analysis = analyze_index_technical_bias(banknifty_data, 'BANKNIFTY') if not banknifty_data.empty else None
+        # Enhanced analysis with RSI trends
+        nifty_analysis = analyze_index_technical_bias_enhanced(nifty_data, 'NIFTY') if not nifty_data.empty else None
+        banknifty_analysis = analyze_index_technical_bias_enhanced(banknifty_data, 'BANKNIFTY') if not banknifty_data.empty else None
         
         # Fallback tracking
         fallback_flags = {
@@ -308,10 +492,10 @@ def fetch_current_index_prices():
             'NIFTY': round(nifty_price, 2) if nifty_price else 22000.0,
             'BANKNIFTY': round(banknifty_price, 2) if banknifty_price else 48000.0,
             'NIFTY_ANALYSIS': nifty_analysis if nifty_analysis else {
-                'bias': 'Neutral', 'reasoning': 'Data Unavailable*', 'strength': 1, 'is_fallback': True
+                'bias': 'Neutral', 'reasoning': 'Data Unavailable*', 'strength': 1, 'rsi_trend': 'unknown', 'is_fallback': True
             },
             'BANKNIFTY_ANALYSIS': banknifty_analysis if banknifty_analysis else {
-                'bias': 'Neutral', 'reasoning': 'Data Unavailable*', 'strength': 1, 'is_fallback': True
+                'bias': 'Neutral', 'reasoning': 'Data Unavailable*', 'strength': 1, 'rsi_trend': 'unknown', 'is_fallback': True
             },
             'fallback_flags': fallback_flags
         }
@@ -321,10 +505,10 @@ def fetch_current_index_prices():
             'NIFTY': 22000.0,
             'BANKNIFTY': 48000.0,
             'NIFTY_ANALYSIS': {
-                'bias': 'Neutral', 'reasoning': 'Fetch Failed*', 'strength': 1, 'is_fallback': True
+                'bias': 'Neutral', 'reasoning': 'Fetch Failed*', 'strength': 1, 'rsi_trend': 'unknown', 'is_fallback': True
             },
             'BANKNIFTY_ANALYSIS': {
-                'bias': 'Neutral', 'reasoning': 'Fetch Failed*', 'strength': 1, 'is_fallback': True
+                'bias': 'Neutral', 'reasoning': 'Fetch Failed*', 'strength': 1, 'rsi_trend': 'unknown', 'is_fallback': True
             },
             'fallback_flags': {
                 'nifty_price': True, 'banknifty_price': True,
@@ -332,21 +516,17 @@ def fetch_current_index_prices():
             }
         }
 
-def get_expanded_fno_stocks():
-    """Expanded F&O stock universe"""
-    return [
-        'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK', 'KOTAKBANK', 'SBIN', 
-        'BHARTIARTL', 'ITC', 'LT', 'ASIANPAINT', 'TITAN', 'AXISBANK', 'MARUTI',
-        'BAJFINANCE', 'SUNPHARMA', 'WIPRO', 'TATASTEEL', 'ULTRACEMCO', 'HINDALCO',
-        'ONGC', 'COALINDIA', 'NTPC', 'POWERGRID', 'HCLTECH', 'TECHM', 'DRREDDY'
-    ]
-
-def fetch_stock_prices_with_analysis(symbols):
-    """Fetch stock prices with technical analysis"""
+def fetch_all_fno_stock_prices():
+    """FIXED: Fetch ALL F&O stock prices, not just RELIANCE and TCS"""
+    fno_stocks = get_all_fno_stocks()
     stocks_data = {}
     
-    for symbol in symbols:
+    progress_placeholder = st.empty()
+    
+    for i, symbol in enumerate(fno_stocks):
         try:
+            progress_placeholder.text(f"Fetching F&O stock data: {symbol} ({i+1}/{len(fno_stocks)})")
+            
             stock = yf.Ticker(f"{symbol}.NS")
             data = stock.history(period="1mo")
             
@@ -366,8 +546,8 @@ def fetch_stock_prices_with_analysis(symbols):
                     current_rsi = 50
                     rsi_is_fallback = True
                 
-                # Get technical bias
-                bias_analysis = analyze_stock_fno_bias(data, symbol, current_rsi)
+                # Enhanced technical bias analysis
+                bias_analysis = analyze_stock_fno_bias_enhanced(data, symbol, current_rsi)
                 
                 stocks_data[symbol] = {
                     'price': current_price,
@@ -381,20 +561,19 @@ def fetch_stock_prices_with_analysis(symbols):
                     }
                 }
             else:
-                # Complete fallback
+                # Fallback for individual stocks
                 default_prices = {
                     'RELIANCE': 2500, 'TCS': 3200, 'HDFCBANK': 1600, 'INFY': 1400,
                     'ICICIBANK': 900, 'KOTAKBANK': 1700, 'SBIN': 600, 'BHARTIARTL': 900,
                     'ITC': 450, 'LT': 2800, 'ASIANPAINT': 3000, 'TITAN': 2800,
-                    'AXISBANK': 1000, 'MARUTI': 10000, 'BAJFINANCE': 6500, 'SUNPHARMA': 1100,
-                    'WIPRO': 550, 'TATASTEEL': 140, 'ULTRACEMCO': 8500, 'HINDALCO': 500
+                    'AXISBANK': 1000, 'MARUTI': 10000, 'BAJFINANCE': 6500, 'SUNPHARMA': 1100
                 }
                 
                 stocks_data[symbol] = {
                     'price': default_prices.get(symbol, 1000),
                     'rsi': 50,
                     'bias_analysis': {
-                        'bias': 'Neutral', 'reasoning': 'Default Data*', 'strength': 1, 'is_fallback': True
+                        'bias': 'Neutral', 'reasoning': 'Default Data*', 'strength': 1, 'rsi_trend': 'unknown', 'is_fallback': True
                     },
                     'volume_avg': 1000000,
                     'fallback_flags': {
@@ -408,7 +587,7 @@ def fetch_stock_prices_with_analysis(symbols):
                 'price': 1000,
                 'rsi': 50,
                 'bias_analysis': {
-                    'bias': 'Neutral', 'reasoning': 'Error*', 'strength': 1, 'is_fallback': True
+                    'bias': 'Neutral', 'reasoning': 'Error*', 'strength': 1, 'rsi_trend': 'unknown', 'is_fallback': True
                 },
                 'volume_avg': 1000000,
                 'fallback_flags': {
@@ -416,422 +595,168 @@ def fetch_stock_prices_with_analysis(symbols):
                 }
             }
     
+    progress_placeholder.empty()
     return stocks_data
 
-def get_correct_strike_prices(underlying_price, option_type):
-    """Get correct strike intervals"""
-    if option_type == 'index':
-        if underlying_price > 40000:  # Bank Nifty range
-            interval = 100
-        else:  # Nifty range  
-            interval = 50
-    else:  # Stock options
-        if underlying_price >= 2000:
-            interval = 100
-        elif underlying_price >= 1000:
-            interval = 50
-        elif underlying_price >= 500:
-            interval = 20
-        elif underlying_price >= 250:
-            interval = 10
-        else:
-            interval = 5
-    
-    # Generate strikes around ATM
-    atm_strike = round(underlying_price / interval) * interval
-    
-    strikes = []
-    for i in range(-3, 4):  # 3 strikes below and above ATM
-        strike = atm_strike + (i * interval)
-        if strike > 0:
-            strikes.append(strike)
-    
-    return strikes
-
-def calculate_spot_targets_with_reasoning(current_spot, bias_analysis, option_type, strike):
-    """Calculate spot targets with detailed reasoning"""
-    try:
-        bias = bias_analysis['bias']
-        reasoning = bias_analysis['reasoning']
-        strength = bias_analysis['strength']
-        
-        # Base movement calculation
-        if current_spot < 1000:  # Stock
-            base_move_pct = np.random.uniform(0.02, 0.06) * strength  # 2-6% based on strength
-        else:  # Index
-            base_move_pct = np.random.uniform(0.01, 0.03) * strength  # 1-3% based on strength
-        
-        if bias == 'Bullish':
-            spot_target = current_spot * (1 + base_move_pct)
-            spot_sl = current_spot * (1 - base_move_pct * 0.6)  # Tighter SL
-            direction = 'Bullish'
-        elif bias == 'Bearish':
-            spot_target = current_spot * (1 - base_move_pct)
-            spot_sl = current_spot * (1 + base_move_pct * 0.6)
-            direction = 'Bearish'
-        else:  # Neutral
-            # Slight bullish bias for neutral
-            spot_target = current_spot * (1 + base_move_pct * 0.5)
-            spot_sl = current_spot * (1 - base_move_pct * 0.5)
-            direction = 'Neutral-Bullish'
-        
-        target_pct = abs((spot_target - current_spot) / current_spot) * 100
-        sl_pct = abs((spot_sl - current_spot) / current_spot) * 100
-        
-        # Enhanced reasoning
-        enhanced_reasoning = f"{reasoning} → {direction} Target"
-        
-        return {
-            'spot_target': round(spot_target, 2),
-            'spot_sl': round(spot_sl, 2),
-            'target_pct': round(target_pct, 1),
-            'sl_pct': round(sl_pct, 1),
-            'direction': direction,
-            'reasoning': enhanced_reasoning,
-            'technical_strength': strength,
-            'is_fallback': bias_analysis.get('is_fallback', False)
-        }
-        
-    except Exception as e:
-        return {
-            'spot_target': round(current_spot * 1.02, 2),
-            'spot_sl': round(current_spot * 0.98, 2),
-            'target_pct': 2.0,
-            'sl_pct': 2.0,
-            'direction': 'Neutral',
-            'reasoning': 'Calculation Failed*',
-            'technical_strength': 1,
-            'is_fallback': True
-        }
-
-def calculate_realistic_premium(spot_price, strike, option_type, days_to_expiry, underlying_type):
-    """Calculate realistic option premium based on actual market conditions"""
-    try:
-        # Calculate intrinsic value
-        if option_type == 'CE':
-            intrinsic_value = max(0, spot_price - strike)
-            moneyness = spot_price / strike
-        else:  # PE
-            intrinsic_value = max(0, strike - spot_price)
-            moneyness = strike / spot_price
-        
-        # Time value calculation (more realistic)
-        time_factor = days_to_expiry / 365.0
-        
-        # Volatility assumptions (based on underlying)
-        if underlying_type == 'index':
-            if spot_price > 40000:  # Bank Nifty
-                implied_vol = 0.18  # 18% volatility
-                base_premium_pct = 0.015  # 1.5% of spot for ATM options
-            else:  # Nifty
-                implied_vol = 0.15  # 15% volatility
-                base_premium_pct = 0.012  # 1.2% of spot for ATM options
-        else:  # Stock
-            implied_vol = 0.25  # 25% volatility for stocks
-            base_premium_pct = 0.02   # 2% of spot for ATM options
-        
-        # Calculate time value based on moneyness
-        if 0.98 <= moneyness <= 1.02:  # ATM options
-            time_value = spot_price * base_premium_pct * np.sqrt(time_factor)
-        elif moneyness > 1.05 or moneyness < 0.95:  # Deep OTM/ITM
-            time_value = spot_price * base_premium_pct * 0.3 * np.sqrt(time_factor)
-        else:  # Near ATM
-            time_value = spot_price * base_premium_pct * 0.7 * np.sqrt(time_factor)
-        
-        # Adjust for very short expiry (time decay)
-        if days_to_expiry <= 3:
-            time_value *= 0.5  # Significant time decay
-        elif days_to_expiry <= 7:
-            time_value *= 0.7
-        
-        # Total premium
-        total_premium = intrinsic_value + time_value
-        
-        # Minimum premium bounds
-        if underlying_type == 'index':
-            min_premium = 5 if spot_price < 25000 else 10
-        else:
-            min_premium = 2
-        
-        # Maximum premium bounds (prevent unrealistic values)
-        max_premium = spot_price * 0.08  # Max 8% of spot price
-        
-        # Apply bounds
-        total_premium = max(min_premium, min(total_premium, max_premium))
-        
-        return round(total_premium, 2)
-        
-    except Exception:
-        # Fallback premium
-        if underlying_type == 'index':
-            return round(spot_price * 0.005, 2)  # 0.5% of spot
-        else:
-            return round(spot_price * 0.01, 2)   # 1% of spot
-
-def calculate_realistic_target(current_premium, spot_move_pct, option_type, days_to_expiry):
-    """Calculate realistic target premium and gain percentage"""
-    try:
-        # Option gain multiplier based on spot movement
-        # Options have leveraged exposure to underlying movement
-        
-        if days_to_expiry <= 3:
-            # Very short expiry - higher leverage but more risk
-            leverage_factor = spot_move_pct * 8  # 8x leverage
-        elif days_to_expiry <= 7:
-            # Short expiry - good leverage
-            leverage_factor = spot_move_pct * 6  # 6x leverage
-        elif days_to_expiry <= 15:
-            # Medium expiry - moderate leverage
-            leverage_factor = spot_move_pct * 4  # 4x leverage
-        else:
-            # Longer expiry - lower leverage due to time decay
-            leverage_factor = spot_move_pct * 3  # 3x leverage
-        
-        # Cap the maximum gain to realistic levels
-        max_gain_pct = min(leverage_factor, 150)  # Max 150% gain
-        min_gain_pct = max(leverage_factor * 0.3, 20)  # Min 20% gain
-        
-        # Random gain within realistic range
-        expected_gain_pct = np.random.uniform(min_gain_pct, max_gain_pct)
-        
-        # Calculate target premium
-        target_premium = current_premium * (1 + expected_gain_pct / 100)
-        
-        return round(target_premium, 2), round(expected_gain_pct, 1)
-        
-    except Exception:
-        # Fallback calculation
-        fallback_gain = 30  # 30% gain
-        target_premium = current_premium * 1.3
-        return round(target_premium, 2), fallback_gain
-
-def estimate_option_premium_enhanced(spot_price, strike, option_type, days_to_expiry, direction, is_fallback=False):
-    """Enhanced option premium estimation with fallback tracking"""
-    try:
-        # Calculate moneyness
-        if option_type == 'CE':
-            moneyness = spot_price / strike
-            itm_value = max(0, spot_price - strike)
-        else:  # PE
-            moneyness = strike / spot_price  
-            itm_value = max(0, strike - spot_price)
-        
-        # Time value
-        time_value_factor = np.sqrt(days_to_expiry / 30) * 0.8
-        
-        # Base premium
-        if moneyness > 1.02:  # ITM
-            base_premium = itm_value + (spot_price * 0.02 * time_value_factor)
-        elif moneyness > 0.98:  # ATM  
-            base_premium = spot_price * 0.03 * time_value_factor
-        else:  # OTM
-            base_premium = spot_price * 0.01 * time_value_factor
-        
-        # Direction-based adjustment
-        if direction.startswith('Bullish') and option_type == 'CE':
-            premium_multiplier = np.random.uniform(1.3, 2.8)
-        elif direction.startswith('Bearish') and option_type == 'PE':
-            premium_multiplier = np.random.uniform(1.3, 2.8)
-        else:
-            premium_multiplier = np.random.uniform(0.8, 1.8)
-        
-        estimated_premium = base_premium * premium_multiplier
-        
-        # Bounds checking
-        if estimated_premium < 5:
-            estimated_premium = np.random.uniform(5, 20)
-        elif estimated_premium > spot_price * 0.15:
-            estimated_premium = spot_price * 0.15
-        
-        premium_with_flag = round(estimated_premium, 2)
-        if is_fallback:
-            premium_with_flag = f"{premium_with_flag}*"
-        
-        return premium_with_flag
-        
-    except:
-        fallback_premium = round(np.random.uniform(10, 50), 2)
-        return f"{fallback_premium}*"
-
 def generate_fno_opportunities():
-    """Generate comprehensive F&O opportunities with technical reasoning"""
+    """ENHANCED: Generate F&O opportunities with NO DUPLICATES and ALL STOCKS"""
     
     try:
-        # Get current data with fallback tracking
-        expiry_dates = get_next_expiry_dates()
-        index_data = fetch_current_index_prices()
-        
-        fno_stocks = get_expanded_fno_stocks()
-        stock_data = fetch_stock_prices_with_analysis(fno_stocks)
+        # Get current data
+        expiry_dates = get_next_expiry_dates_fixed()
+        index_data = fetch_current_index_prices_enhanced()
+        fno_stocks = get_all_fno_stocks()
+        stock_data = fetch_all_fno_stock_prices()
         
         recommendations = []
         
-        # === NIFTY OPTIONS ===
+        # === NIFTY OPTIONS (NO DUPLICATES - ONLY ONE BEST) ===
         nifty_price = index_data['NIFTY']
         nifty_analysis = index_data['NIFTY_ANALYSIS']
         nifty_expiry_days = (expiry_dates['nifty'] - datetime.now()).days
         
-        # Get spot analysis
-        nifty_spot_data = calculate_spot_targets_with_reasoning(
-            nifty_price, nifty_analysis, 'index', nifty_price
-        )
+        # NIFTY: Only ONE option based on bias
+        nifty_strike = round(nifty_price / 50) * 50  # Nearest 50 strike
         
-        # NIFTY: Show ONLY 1 best opportunity
-        nifty_strikes = get_correct_strike_prices(nifty_price, 'index')
-        atm_strike = nifty_strikes[len(nifty_strikes)//2]  # Get ATM strike only
-        
-        # Determine option type based on bias
         if nifty_analysis['bias'] == 'Bearish':
-            primary_option_type = 'PE'
+            nifty_option_type = 'PE'
+            nifty_strategy = "NIFTY PE - Bearish Setup"
         else:
-            primary_option_type = 'CE'
+            nifty_option_type = 'CE'
+            nifty_strategy = "NIFTY CE - Bullish Setup"
         
-        # Calculate realistic premium
-        option_premium = calculate_realistic_premium(
-            nifty_price, atm_strike, primary_option_type, nifty_expiry_days, 'index'
+        # Calculate realistic targets
+        nifty_targets = calculate_realistic_option_targets(
+            nifty_price, nifty_strike, nifty_option_type, nifty_expiry_days, 
+            nifty_analysis, 'index'
         )
         
-        # Calculate realistic target premium
-        target_premium, gain_pct = calculate_realistic_target(
-            option_premium, nifty_spot_data['target_pct'], primary_option_type, nifty_expiry_days
-        )
-        
-        # Create fallback indicators
-        fallback_notes = []
+        # Fallback indicators
+        nifty_fallback_notes = []
         if index_data['fallback_flags'].get('nifty_price'):
-            fallback_notes.append("Price*")
+            nifty_fallback_notes.append("Price*")
         if nifty_analysis['is_fallback']:
-            fallback_notes.append("Analysis*")
+            nifty_fallback_notes.append("Analysis*")
         if expiry_dates.get('is_fallback'):
-            fallback_notes.append("Expiry*")
+            nifty_fallback_notes.append("Expiry*")
             
-        data_quality = "Real Data" if not fallback_notes else f"Mixed Data ({', '.join(fallback_notes)})"
+        nifty_data_quality = "Real Data" if not nifty_fallback_notes else f"Mixed Data ({', '.join(nifty_fallback_notes)})"
         
         recommendations.append({
             'Underlying': 'NIFTY',
             'Current Spot': nifty_price,
-            'Spot Target': nifty_spot_data['spot_target'],
-            'Spot SL': nifty_spot_data['spot_sl'],
-            'Spot Move %': f"{nifty_spot_data['target_pct']:.1f}%",
-            'Strike': int(atm_strike),
-            'Option Type': primary_option_type,
-            'Premium (LTP)': option_premium,
-            'Target Premium': target_premium,
-            'Option Gain %': gain_pct,
+            'Strike': int(nifty_strike),
+            'Option Type': nifty_option_type,
+            'Premium (LTP)': nifty_targets['current_premium'],
+            'Target Premium': nifty_targets['target_premium'],
+            'Option Gain %': nifty_targets['expected_gain_pct'],
             'Days to Expiry': nifty_expiry_days,
             'Expiry Date': expiry_dates['nifty'].strftime('%d-%b-%Y'),
-            'Selection Reason': nifty_spot_data['reasoning'],
+            'Selection Reason': nifty_analysis['reasoning'],
             'Technical Bias': nifty_analysis['bias'],
+            'RSI Trend': nifty_analysis['rsi_trend'],
             'Bias Strength': nifty_analysis['strength'],
-            'Direction': nifty_spot_data['direction'],
-            'Strategy': f"NIFTY {primary_option_type} - {nifty_analysis['bias']} Setup",
+            'Strategy': nifty_strategy,
             'Risk Level': 'Medium',
-            'Data Quality': data_quality
+            'Data Quality': nifty_data_quality
         })
         
-        # === BANKNIFTY OPTIONS ===
+        # === BANKNIFTY OPTIONS (NO DUPLICATES - ONLY ONE BEST) ===
         banknifty_price = index_data['BANKNIFTY']
         banknifty_analysis = index_data['BANKNIFTY_ANALYSIS']
         banknifty_expiry_days = (expiry_dates['banknifty'] - datetime.now()).days
         
-        banknifty_spot_data = calculate_spot_targets_with_reasoning(
-            banknifty_price, banknifty_analysis, 'index', banknifty_price
-        )
-        
-        # BANKNIFTY: Show ONLY 1 best opportunity
-        banknifty_strikes = get_correct_strike_prices(banknifty_price, 'index')
-        atm_strike = banknifty_strikes[len(banknifty_strikes)//2]  # Get ATM strike only
+        # BANKNIFTY: Only ONE option based on bias
+        banknifty_strike = round(banknifty_price / 100) * 100  # Nearest 100 strike
         
         if banknifty_analysis['bias'] == 'Bearish':
-            primary_option_type = 'PE'
+            banknifty_option_type = 'PE'
+            banknifty_strategy = "BANKNIFTY PE - Banking Bearish"
         else:
-            primary_option_type = 'CE'
+            banknifty_option_type = 'CE'
+            banknifty_strategy = "BANKNIFTY CE - Banking Bullish"
         
-        # Calculate realistic premium
-        option_premium = calculate_realistic_premium(
-            banknifty_price, atm_strike, primary_option_type, banknifty_expiry_days, 'index'
-        )
-        
-        # Calculate realistic target premium
-        target_premium, gain_pct = calculate_realistic_target(
-            option_premium, banknifty_spot_data['target_pct'], primary_option_type, banknifty_expiry_days
+        # Calculate realistic targets
+        banknifty_targets = calculate_realistic_option_targets(
+            banknifty_price, banknifty_strike, banknifty_option_type, banknifty_expiry_days,
+            banknifty_analysis, 'index'
         )
         
         # Fallback tracking
-        fallback_notes = []
+        banknifty_fallback_notes = []
         if index_data['fallback_flags'].get('banknifty_price'):
-            fallback_notes.append("Price*")
+            banknifty_fallback_notes.append("Price*")
         if banknifty_analysis['is_fallback']:
-            fallback_notes.append("Analysis*")
+            banknifty_fallback_notes.append("Analysis*")
             
-        data_quality = "Real Data" if not fallback_notes else f"Mixed Data ({', '.join(fallback_notes)})"
+        banknifty_data_quality = "Real Data" if not banknifty_fallback_notes else f"Mixed Data ({', '.join(banknifty_fallback_notes)})"
         
         recommendations.append({
             'Underlying': 'BANKNIFTY',
             'Current Spot': banknifty_price,
-            'Spot Target': banknifty_spot_data['spot_target'],
-            'Spot SL': banknifty_spot_data['spot_sl'],
-            'Spot Move %': f"{banknifty_spot_data['target_pct']:.1f}%",
-            'Strike': int(atm_strike),
-            'Option Type': primary_option_type,
-            'Premium (LTP)': option_premium,
-            'Target Premium': target_premium,
-            'Option Gain %': gain_pct,
+            'Strike': int(banknifty_strike),
+            'Option Type': banknifty_option_type,
+            'Premium (LTP)': banknifty_targets['current_premium'],
+            'Target Premium': banknifty_targets['target_premium'],
+            'Option Gain %': banknifty_targets['expected_gain_pct'],
             'Days to Expiry': banknifty_expiry_days,
             'Expiry Date': expiry_dates['banknifty'].strftime('%d-%b-%Y'),
-            'Selection Reason': banknifty_spot_data['reasoning'],
+            'Selection Reason': banknifty_analysis['reasoning'],
             'Technical Bias': banknifty_analysis['bias'],
+            'RSI Trend': banknifty_analysis['rsi_trend'],
             'Bias Strength': banknifty_analysis['strength'],
-            'Direction': banknifty_spot_data['direction'],
-            'Strategy': f"BANKNIFTY {primary_option_type} - Banking {banknifty_analysis['bias']}",
+            'Strategy': banknifty_strategy,
             'Risk Level': 'High',
-            'Data Quality': data_quality
+            'Data Quality': banknifty_data_quality
         })
         
-        # === STOCK OPTIONS ===
+        # === STOCK OPTIONS (ALL STOCKS, NO DUPLICATES) ===
         stock_expiry_days = (expiry_dates['stocks'] - datetime.now()).days
         
-        # Process top 8 stocks with strong bias
+        # Process ALL F&O stocks, but only include those with clear bias
         processed_stocks = 0
         for stock in fno_stocks:
-            if processed_stocks >= 8:
+            if processed_stocks >= 15:  # Limit to top 15 stock opportunities
                 break
                 
             stock_info = stock_data[stock]
             stock_price = stock_info['price']
             bias_analysis = stock_info['bias_analysis']
             
-            # Only include stocks with clear bias or extreme RSI
+            # Only include stocks with clear directional bias OR extreme RSI
             if (bias_analysis['bias'] != 'Neutral' or 
                 stock_info['rsi'] < 35 or stock_info['rsi'] > 65):
                 
-                # Get spot analysis
-                spot_data = calculate_spot_targets_with_reasoning(
-                    stock_price, bias_analysis, 'stock', stock_price
-                )
+                # Calculate appropriate strike (Indian market standards)
+                if stock_price >= 2000:
+                    strike_interval = 100
+                elif stock_price >= 1000:
+                    strike_interval = 50
+                elif stock_price >= 500:
+                    strike_interval = 20
+                elif stock_price >= 250:
+                    strike_interval = 10
+                else:
+                    strike_interval = 5
                 
-                # Get best strike
-                stock_strikes = get_correct_strike_prices(stock_price, 'stock')
-                best_strike = stock_strikes[len(stock_strikes)//2]  # ATM strike
+                stock_strike = round(stock_price / strike_interval) * strike_interval
                 
-                # Determine option type
-                if bias_analysis['bias'] == 'Bearish' or stock_info['rsi'] > 70:
+                # Determine option type based on enhanced bias
+                if bias_analysis['bias'] == 'Bearish' or (stock_info['rsi'] > 70 and bias_analysis['rsi_trend'] == 'falling'):
                     option_type = 'PE'
+                    strategy_desc = f"{stock} PE - {bias_analysis['reasoning'][:20]}"
                 else:
                     option_type = 'CE'
+                    strategy_desc = f"{stock} CE - {bias_analysis['reasoning'][:20]}"
                 
-                # Calculate realistic premium for stock option
-                option_premium = calculate_realistic_premium(
-                    stock_price, best_strike, option_type, stock_expiry_days, 'stock'
+                # Calculate realistic targets
+                stock_targets = calculate_realistic_option_targets(
+                    stock_price, stock_strike, option_type, stock_expiry_days,
+                    bias_analysis, 'stock'
                 )
                 
-                # Calculate realistic target premium
-                target_premium, gain_pct = calculate_realistic_target(
-                    option_premium, spot_data['target_pct'], option_type, stock_expiry_days
-                )
-                
-                # Check gain potential (realistic range)
-                if 20 <= gain_pct <= 200:
+                # Only include if realistic gain potential
+                if -70 <= stock_targets['expected_gain_pct'] <= 250:
                     
                     # Fallback tracking
                     fallback_notes = []
@@ -842,39 +767,40 @@ def generate_fno_opportunities():
                     if stock_info['fallback_flags'].get('analysis'):
                         fallback_notes.append("Analysis*")
                         
-                    data_quality = "Real Data" if not fallback_notes else f"Mixed Data ({', '.join(fallback_notes)})"
+                    stock_data_quality = "Real Data" if not fallback_notes else f"Mixed Data ({', '.join(fallback_notes)})"
                     
                     recommendations.append({
                         'Underlying': stock,
                         'Current Spot': stock_price,
-                        'Spot Target': spot_data['spot_target'],
-                        'Spot SL': spot_data['spot_sl'],
-                        'Spot Move %': f"{spot_data['target_pct']:.1f}%",
-                        'Strike': int(best_strike),
+                        'Strike': int(stock_strike),
                         'Option Type': option_type,
-                        'Premium (LTP)': option_premium,
-                        'Target Premium': target_premium,
-                        'Option Gain %': gain_pct,
+                        'Premium (LTP)': stock_targets['current_premium'],
+                        'Target Premium': stock_targets['target_premium'],
+                        'Option Gain %': stock_targets['expected_gain_pct'],
                         'Days to Expiry': stock_expiry_days,
                         'Expiry Date': expiry_dates['stocks'].strftime('%d-%b-%Y'),
-                        'Selection Reason': spot_data['reasoning'],
+                        'Selection Reason': bias_analysis['reasoning'],
                         'Technical Bias': bias_analysis['bias'],
                         'RSI Level': stock_info['rsi'],
-                        'Direction': spot_data['direction'],
-                        'Strategy': f"{stock} {option_type} - {bias_analysis['reasoning'][:20]}",
-                        'Risk Level': 'High' if gain_pct > 100 else 'Medium',
-                        'Data Quality': data_quality
+                        'RSI Trend': bias_analysis['rsi_trend'],
+                        'Strategy': strategy_desc,
+                        'Risk Level': 'High' if abs(stock_targets['expected_gain_pct']) > 100 else 'Medium',
+                        'Data Quality': stock_data_quality
                     })
                     
                     processed_stocks += 1
         
-        # Convert to DataFrame and sort
+        # Convert to DataFrame and sort (NO DUPLICATES)
         df = pd.DataFrame(recommendations)
         if not df.empty:
-            # Sort: Indices first, then by bias strength
+            # Sort: Indices first, then by expected gain (absolute value)
             df['Sort_Order'] = df['Underlying'].apply(lambda x: 0 if x in ['NIFTY', 'BANKNIFTY'] else 1)
-            df = df.sort_values(['Sort_Order', 'Bias Strength', 'Option Gain %'], ascending=[True, False, False])
-            df = df.drop('Sort_Order', axis=1)
+            df['Abs_Gain'] = df['Option Gain %'].abs()
+            df = df.sort_values(['Sort_Order', 'Abs_Gain'], ascending=[True, False])
+            df = df.drop(['Sort_Order', 'Abs_Gain'], axis=1)
+            
+            # CRITICAL: Ensure NO duplicates by underlying
+            df = df.drop_duplicates(subset=['Underlying'], keep='first')
         
         return df
         
@@ -884,28 +810,43 @@ def generate_fno_opportunities():
         return pd.DataFrame()
 
 def get_options_summary(df):
-    """Enhanced options summary with fallback tracking"""
+    """Enhanced options summary with comprehensive statistics"""
     if df.empty:
         return {'total_opportunities': 0}
     
-    # Count fallback data
+    # Count data quality
     mixed_data_count = len(df[df['Data Quality'].str.contains('Mixed', na=False)])
     real_data_count = len(df[df['Data Quality'].str.contains('Real', na=False)])
+    
+    # Calculate advanced metrics
+    bullish_count = len(df[df['Technical Bias'] == 'Bullish'])
+    bearish_count = len(df[df['Technical Bias'] == 'Bearish'])
+    
+    ce_count = len(df[df['Option Type'] == 'CE'])
+    pe_count = len(df[df['Option Type'] == 'PE'])
+    
+    positive_gain_count = len(df[df['Option Gain %'] > 0])
+    negative_gain_count = len(df[df['Option Gain %'] < 0])
     
     return {
         'total_opportunities': len(df),
         'avg_option_gain': round(df['Option Gain %'].mean(), 1),
         'max_option_gain': round(df['Option Gain %'].max(), 1),
-        'avg_spot_move': round(df['Spot Move %'].str.replace('%', '').astype(float).mean(), 1),
-        'nifty_opportunities': len(df[df['Underlying'] == 'NIFTY']),
-        'banknifty_opportunities': len(df[df['Underlying'] == 'BANKNIFTY']),
+        'min_option_gain': round(df['Option Gain %'].min(), 1),
+        'index_opportunities': len(df[df['Underlying'].isin(['NIFTY', 'BANKNIFTY'])]),
         'stock_opportunities': len(df[~df['Underlying'].isin(['NIFTY', 'BANKNIFTY'])]),
-        'bullish_setups': len(df[df['Technical Bias'] == 'Bullish']),
-        'bearish_setups': len(df[df['Technical Bias'] == 'Bearish']),
-        'neutral_setups': len(df[df['Technical Bias'] == 'Neutral']),
+        'bullish_setups': bullish_count,
+        'bearish_setups': bearish_count,
+        'neutral_setups': len(df) - bullish_count - bearish_count,
+        'ce_options': ce_count,
+        'pe_options': pe_count,
+        'positive_expectations': positive_gain_count,
+        'negative_expectations': negative_gain_count,
         'high_risk_count': len(df[df['Risk Level'] == 'High']),
         'medium_risk_count': len(df[df['Risk Level'] == 'Medium']),
         'real_data_count': real_data_count,
         'mixed_data_count': mixed_data_count,
-        'data_quality_ratio': f"{real_data_count}/{real_data_count + mixed_data_count}" if (real_data_count + mixed_data_count) > 0 else "0/0"
+        'data_quality_ratio': f"{real_data_count}/{real_data_count + mixed_data_count}" if (real_data_count + mixed_data_count) > 0 else "0/0",
+        'avg_days_to_expiry': round(df['Days to Expiry'].mean(), 0),
+        'unique_underlyings': df['Underlying'].nunique()
     }
