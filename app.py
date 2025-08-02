@@ -1,4 +1,4 @@
-# app.py - COMPLETE WORKING VERSION WITH ALL FIXES
+# app.py - FIXED INDENTATION ERROR
 import streamlit as st
 import pandas as pd
 import yfinance as yf
@@ -182,7 +182,7 @@ if 'news_data' not in st.session_state:
     st.session_state.news_data = []
 
 # Main title
-st.markdown('<h1 class="main-header">📈 Kamal\'s Trading Dashboard - Enhanced</h1>', unsafe_allow_html=True)
+st.markdown('<h1 class="main-header">📈 Kamal\'s Trading Dashboard - Fixed</h1>', unsafe_allow_html=True)
 
 # Import modules safely
 modules = safe_import_modules()
@@ -200,20 +200,18 @@ if st.sidebar.button("🔄 Refresh All Data"):
 # Create tabs
 tab1, tab2, tab3, tab4 = st.tabs(["📰 Market News", "🇮🇳 Indian Stocks", "🇺🇸 US Stocks", "📊 F&O Options"])
 
-# =====================================================
-# TAB 1: ENHANCED MARKET NEWS
-# =====================================================
+# Tab 1: Market News
 with tab1:
     st.subheader("📰 Latest Market News & Analysis")
     
     if st.button("🔄 Refresh Latest News", type="primary"):
         if modules.get('news'):
             try:
-                with st.spinner("Fetching latest news from multiple sources..."):
+                with st.spinner("Fetching latest news..."):
                     st.session_state.news_data = modules['get_latest_news']()
                 
                 if st.session_state.news_data:
-                    st.success(f"✅ Loaded {len(st.session_state.news_data)} latest news items")
+                    st.success(f"✅ Loaded {len(st.session_state.news_data)} news items")
                 else:
                     st.warning("No recent news data available.")
                     
@@ -223,20 +221,20 @@ with tab1:
             st.session_state.news_data = [
                 {
                     'title': 'Sample Market News',
-                    'summary': 'This is sample news data as the news module is not available.',
+                    'summary': 'This is sample news data.',
                     'category': 'Market Movement',
                     'market_impact': 'Medium',
                     'source': 'Sample News',
                     'time': datetime.now().strftime('%H:%M IST'),
                     'date': datetime.now().strftime('%d-%m-%Y'),
-                    'clickable_link': '🔗 Sample link unavailable'
+                    'link': 'https://example.com'
                 }
             ]
-            st.info("📰 Using sample news data (news module not available)")
+            st.info("📰 Using sample news data")
     
     # Display news
     if st.session_state.news_data:
-        for i, news in enumerate(st.session_state.news_data[:15]):
+        for news in st.session_state.news_data[:15]:
             with st.expander(f"📈 {news.get('title', 'No Title')}", expanded=False):
                 col1, col2, col3 = st.columns([1, 1, 2])
                 
@@ -249,10 +247,9 @@ with tab1:
                     st.markdown(f"**📊 Impact:** {news.get('market_impact', 'Low')}")
                 
                 with col3:
-                    st.markdown(f"**🔗 Read Full Article:**")
-                    # FIX: Proper link handling
-                    link = news.get('link', '#')
-                    if link and link != '#':
+                    st.markdown("**🔗 Read Full Article:**")
+                    link = news.get('link', '')
+                    if link and link != '':
                         st.markdown(f"[🔗 Read Full Article]({link})")
                     else:
                         st.markdown("🔗 Link unavailable")
@@ -260,42 +257,32 @@ with tab1:
                 st.markdown("**📝 Summary:**")
                 st.markdown(f"*{news.get('summary', 'No summary available')}*")
     else:
-        st.info("Click 'Refresh Latest News' to load the latest market updates!")
+        st.info("Click 'Refresh Latest News' to load updates!")
 
-# =====================================================
-# TAB 2: INDIAN STOCKS - FIXED SCAN BUTTON
-# =====================================================
+# Tab 2: Indian Stocks
 with tab2:
     st.subheader("🇮🇳 Indian Stock Recommendations")
     
-    # Enhanced information panel
     st.markdown("""
     <div class="opportunity-alert">
     <strong>📊 Enhanced NSE Scanner</strong><br>
-    • Complete NSE universe scanning capability<br>
-    • Advanced RSI recovery pattern detection<br>
-    • Support level bounce analysis with volume confirmation
+    Complete NSE universe scanning with advanced technical analysis
     </div>
     """, unsafe_allow_html=True)
     
-    # Parameter controls
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         min_price_in = st.number_input("Min Price (₹)", value=25, min_value=1, key="in_price")
-    
     with col2:
         max_rsi_in = st.number_input("Max RSI", value=70, min_value=30, max_value=100, key="in_rsi")
-    
     with col3:
         min_tech_score = st.number_input("Min Technical Score", value=5, min_value=3, max_value=8, key="tech_score")
-    
     with col4:
         batch_size_in = st.number_input("Stocks to Scan", value=150, min_value=50, max_value=500, key="in_batch")
     
-    # FIXED: Scan button that was missing
-    if st.button("🔍 Start Indian Stock Scan", type="primary", key="scan_indian_fixed"):
-        with st.spinner("🔄 Scanning Indian stocks..."):
+    if st.button("🔍 Start Indian Stock Scan", type="primary", key="scan_indian"):
+        with st.spinner("Scanning Indian stocks..."):
             try:
                 if modules.get('indian_stock'):
                     st.session_state.indian_recos = modules['get_indian_recommendations'](
@@ -307,22 +294,20 @@ with tab2:
                     )
                 
                 if not st.session_state.indian_recos.empty:
-                    st.success(f"🎯 Found {len(st.session_state.indian_recos)} Indian stock opportunities!")
+                    st.success(f"🎯 Found {len(st.session_state.indian_recos)} opportunities!")
                 else:
-                    st.warning("No stocks found. Try relaxing the criteria.")
+                    st.warning("No stocks found. Try relaxing criteria.")
                     
             except Exception as e:
                 st.error(f"Error during scan: {e}")
     
-    # Display results
     if not st.session_state.indian_recos.empty:
-        st.markdown(f"**📊 Results: {len(st.session_state.indian_recos)} opportunities found**")
+        st.markdown(f"**📊 Results: {len(st.session_state.indian_recos)} opportunities**")
         st.dataframe(st.session_state.indian_recos, use_container_width=True, height=400)
         
-        # Download option
         csv = st.session_state.indian_recos.to_csv(index=False)
         st.download_button(
-            "📥 Download Indian Recommendations",
+            "📥 Download Results",
             csv,
             f"indian_stocks_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
             "text/csv"
@@ -330,18 +315,14 @@ with tab2:
     else:
         st.info("Click 'Start Indian Stock Scan' to find opportunities!")
 
-# =====================================================
-# TAB 3: US STOCKS - COMPLETE IMPLEMENTATION
-# =====================================================
+# Tab 3: US Stocks
 with tab3:
     st.subheader("🇺🇸 US Stock Recommendations")
     
     st.markdown("""
     <div class="opportunity-alert">
-    <strong>📊 Complete S&P 500 Scanner</strong><br>
-    • Full S&P 500 universe coverage (500 stocks)<br>
-    • Bullish and bearish pattern detection<br>
-    • Advanced technical analysis with sector classification
+    <strong>📊 S&P 500 Scanner</strong><br>
+    Complete S&P 500 coverage with advanced pattern detection
     </div>
     """, unsafe_allow_html=True)
     
@@ -353,7 +334,7 @@ with tab3:
     with col3:
         batch_size_us = st.number_input("Stocks to Scan", value=100, min_value=50, max_value=500, key="us_batch")
     
-    if st.button("🔍 Scan S&P 500 Stocks", type="primary", key="scan_us_stocks"):
+    if st.button("🔍 Scan S&P 500 Stocks", type="primary", key="scan_us"):
         with st.spinner("Scanning S&P 500 stocks..."):
             try:
                 if modules.get('us_stock'):
@@ -366,21 +347,20 @@ with tab3:
                     )
                 
                 if not st.session_state.us_recos.empty:
-                    st.success(f"🎯 Found {len(st.session_state.us_recos)} US stock opportunities!")
+                    st.success(f"🎯 Found {len(st.session_state.us_recos)} opportunities!")
                 else:
-                    st.warning("No stocks found. Try relaxing the criteria.")
+                    st.warning("No stocks found. Try relaxing criteria.")
                     
             except Exception as e:
                 st.error(f"Error during scan: {e}")
     
     if not st.session_state.us_recos.empty:
-        st.markdown(f"**📊 Results: {len(st.session_state.us_recos)} opportunities found**")
+        st.markdown(f"**📊 Results: {len(st.session_state.us_recos)} opportunities**")
         st.dataframe(st.session_state.us_recos, use_container_width=True, height=400)
         
-        # Download option
         csv = st.session_state.us_recos.to_csv(index=False)
         st.download_button(
-            "📥 Download US Recommendations",
+            "📥 Download Results",
             csv,
             f"us_stocks_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
             "text/csv"
@@ -388,9 +368,7 @@ with tab3:
     else:
         st.info("Click 'Scan S&P 500 Stocks' to find opportunities!")
 
-# =====================================================
-# TAB 4: F&O OPTIONS - COMPLETE IMPLEMENTATION
-# =====================================================
+# Tab 4: F&O Options
 with tab4:
     st.subheader("📊 F&O Options & Index Trading")
     
@@ -398,10 +376,7 @@ with tab4:
         st.markdown("""
         <div class="opportunity-alert">
         <strong>📈 Enhanced F&O Analysis</strong><br>
-        • NO duplicates - one option per underlying<br>
-        • ALL F&O stocks covered (80+ stocks)<br>
-        • Realistic option targets and premiums<br>
-        • RSI falling detection for bearish setups
+        No duplicates, all F&O stocks, realistic targets
         </div>
         """, unsafe_allow_html=True)
         
@@ -414,13 +389,13 @@ with tab4:
                 ["All Risk Levels", "Medium Risk Only", "High Risk Only"])
         
         if st.button("🔍 Generate F&O Opportunities", type="primary", key="scan_fno"):
-            with st.spinner("Generating enhanced F&O analysis..."):
+            with st.spinner("Generating F&O analysis..."):
                 try:
                     st.session_state.fno_recos = modules['generate_fno_opportunities']()
                     
                     if not st.session_state.fno_recos.empty:
                         summary = modules['get_options_summary'](st.session_state.fno_recos)
-                        st.success(f"🎯 Generated {summary['total_opportunities']} F&O opportunities!")
+                        st.success(f"🎯 Generated {summary['total_opportunities']} opportunities!")
                     else:
                         st.warning("No F&O opportunities found.")
                         
@@ -431,24 +406,23 @@ with tab4:
             st.markdown(f"**📊 F&O Results: {len(st.session_state.fno_recos)} opportunities**")
             st.dataframe(st.session_state.fno_recos, use_container_width=True, height=500)
             
-            # Download option
             csv = st.session_state.fno_recos.to_csv(index=False)
             st.download_button(
-                "📥 Download F&O Recommendations",
+                "📥 Download Results",
                 csv,
                 f"fno_opportunities_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                 "text/csv"
             )
         else:
-            st.info("Click 'Generate F&O Opportunities' to get options analysis!")
+            st.info("Click 'Generate F&O Opportunities' to get analysis!")
     else:
-        st.error("❌ F&O module not available. Please check the fixed_fno_options_logic.py file.")
+        st.error("❌ F&O module not available")
 
 # Footer
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666;">
-<strong>Kamal's Enhanced Trading Dashboard</strong><br>
-⚡ Complete universe scanning • 📰 Multi-source news • 💰 Professional operation
+<strong>Kamal's Trading Dashboard - Fixed Version</strong><br>
+Professional trading analysis with enhanced features
 </div>
 """, unsafe_allow_html=True)
