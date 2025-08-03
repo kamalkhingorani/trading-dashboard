@@ -393,7 +393,7 @@ def get_indian_recommendations(min_price=25, max_rsi=70, min_volume=50000, batch
                 current_price = latest['Close']
                 rsi = latest['RSI']
                 
-                current_rsi = rsi.iloc[-1] if not pd.isna(rsi.iloc[-1]) else 50
+                current_rsi = rsi if not pd.isna(rsi) else 50
                 
                 # Check RSI rising trend
                 rsi_rising = False
