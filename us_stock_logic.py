@@ -540,13 +540,21 @@ def get_us_recommendations(min_price=25, max_rsi=65, min_volume=500000, batch_si
                 current_price = latest['Close']
                 rsi = latest['RSI']
                 
-                current_rsi = rsi if not pd.isna(rsi) else 50
+                current_rsi = rsi.iloc[-1] if not pd.isna(rsi.iloc[-1]) else 50
                 
-                # Check RSI rising trend
+                # Check RSI rising trend (2 consecutive days preferred)
                 rsi_rising = False
-                if len(data['RSI']) >= 3:
-                    recent_rsi = data['RSI'].tail(3)
-                    rsi_rising = (recent_rsi.iloc[-1] > recent_rsi.iloc[-2])
+                rsi_rising_days = 0
+                if len(data['RSI']) >= 4:
+                    recent_rsi = data['RSI'].tail(4)
+                    # Check 2 consecutive days rising
+                    if (recent_rsi.iloc[-1] > recent_rsi.iloc[-2] > recent_rsi.iloc[-3]):
+                        rsi_rising = True
+                        rsi_rising_days = 2
+                    # Check 1 day rising
+                    elif (recent_rsi.iloc[-1] > recent_rsi.iloc[-2]):
+                        rsi_rising = True
+                        rsi_rising_days = 1
                 
                 # Volume handling
                 avg_volume = data['Volume'].tail(10).mean() if 'Volume' in data.columns else min_volume
@@ -635,7 +643,7 @@ def get_us_recommendations(min_price=25, max_rsi=65, min_volume=500000, batch_si
                             'Date': datetime.now().strftime('%Y-%m-%d'),
                             'Stock': symbol,
                             'LTP': round(current_price, 2),
-                            'RSI': round(rsi, 1),
+                            'RSI': f"{round(current_rsi, 1)} ({rsi_rising_days}D↑)" if rsi_rising else round(current_rsi, 1),
                             'Target': round(target_data['target'], 2),
                             '% Gain': round(target_data['target_pct'], 1),
                             'Est.Days': target_data['estimated_days'],
