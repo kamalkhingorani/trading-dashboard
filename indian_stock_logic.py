@@ -397,9 +397,12 @@ def get_indian_recommendations(min_price=25, max_rsi=70, min_volume=50000, batch
                 
                 # Check RSI rising trend
                 rsi_rising = False
-                if len(data['RSI']) >= 3:
-                    recent_rsi = data['RSI'].tail(3)
-                    rsi_rising = (recent_rsi.iloc[-1] > recent_rsi.iloc[-2])
+                if len(data['RSI']) >= 5:
+                    recent_rsi = data['RSI'].tail(5)
+                    # RSI rising if current > 3 days ago (allows for 1-2 day dips)
+                    rsi_rising = (recent_rsi.iloc[-1] > recent_rsi.iloc[-3])
+                else:
+                    rsi_rising = True  # If insufficient data, don't filter out
                 
                 # Volume handling with fallback tracking
                 avg_volume = data['Volume'].tail(10).mean() if 'Volume' in data.columns else min_volume
