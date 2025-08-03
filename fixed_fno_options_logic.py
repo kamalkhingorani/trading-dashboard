@@ -642,20 +642,21 @@ else:
             'Data Quality': nifty_data_quality
         })
         
-        # === BANKNIFTY OPTIONS (NO DUPLICATES - ONLY ONE BEST) ===
-        banknifty_price = index_data['BANKNIFTY']
-        banknifty_analysis = index_data['BANKNIFTY_ANALYSIS']
-        banknifty_expiry_days = (expiry_dates['banknifty'] - datetime.now()).days
-        
-        # BANKNIFTY: Only ONE option based on bias
-        banknifty_strike = round(banknifty_price / 100) * 100  # Nearest 100 strike
-        
-        if banknifty_analysis['bias'] == 'Bearish':
-            banknifty_option_type = 'PE'
-            banknifty_strategy = "BANKNIFTY PE - Banking Bearish"
-        else:
-            banknifty_option_type = 'CE'
-            banknifty_strategy = "BANKNIFTY CE - Banking Bullish"
+        # FIXED: Correct option type selection
+if banknifty_analysis['bias'] == 'Bearish':
+    banknifty_option_type = 'PE'  # BEARISH bias → PE options
+    banknifty_strategy = "BANKNIFTY PE - Banking Bearish"
+elif banknifty_analysis['bias'] == 'Bullish':
+    banknifty_option_type = 'CE'  # BULLISH bias → CE options
+    banknifty_strategy = "BANKNIFTY CE - Banking Bullish"
+else:
+    # For neutral, choose based on RSI level
+    if banknifty_analysis.get('current_rsi', 50) > 55:
+        banknifty_option_type = 'PE'
+        banknifty_strategy = "BANKNIFTY PE - Neutral-Bearish"
+    else:
+        banknifty_option_type = 'CE'
+        banknifty_strategy = "BANKNIFTY CE - Neutral-Bullish"
         
         # Calculate realistic targets
         banknifty_targets = calculate_realistic_option_targets(
@@ -722,13 +723,24 @@ else:
                 
                 stock_strike = round(stock_price / strike_interval) * strike_interval
                 
-                # Determine option type based on enhanced bias
-                if bias_analysis['bias'] == 'Bearish' or (stock_info['rsi'] > 70 and bias_analysis['rsi_trend'] == 'falling'):
-                    option_type = 'PE'
-                    strategy_desc = f"{stock} PE - {bias_analysis['reasoning'][:20]}"
-                else:
-                    option_type = 'CE'
-                    strategy_desc = f"{stock} CE - {bias_analysis['reasoning'][:20]}"
+               # === STOCK OPTIONS (FIXED LOGIC) ===
+# For individual stocks in the loop:
+if (bias_analysis['bias'] == 'Bearish' or 
+    (stock_info['rsi'] > 70 and bias_analysis['rsi_trend'] == 'falling')):
+    option_type = 'PE'  # BEARISH conditions → PE options
+    strategy_desc = f"{stock} PE - {bias_analysis['reasoning'][:20]}"
+elif (bias_analysis['bias'] == 'Bullish' or 
+      (stock_info['rsi'] < 35 and bias_analysis['rsi_trend'] == 'rising')):
+    option_type = 'CE'  # BULLISH conditions → CE options
+    strategy_desc = f"{stock} CE - {bias_analysis['reasoning'][:20]}"
+else:
+    # For neutral bias, use RSI level
+    if stock_info['rsi'] > 55:
+        option_type = 'PE'
+        strategy_desc = f"{stock} PE - Neutral Setup"
+    else:
+        option_type = 'CE'
+        strategy_desc = f"{stock} CE - Neutral Setup"
                 
                 # Calculate realistic targets
                 stock_targets = calculate_realistic_option_targets(
