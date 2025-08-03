@@ -485,7 +485,7 @@ def calculate_us_dynamic_targets(data, current_price):
             }
         }
 
-def get_us_recommendations(min_price=25, max_rsi=65, min_volume=500000, batch_size=60):
+def get_us_recommendations(min_price=25, max_rsi=65, min_volume=500000, batch_size=200):
     """ENHANCED: Get US stock recommendations with technical reasoning"""
     
     try:
@@ -499,6 +499,10 @@ def get_us_recommendations(min_price=25, max_rsi=65, min_volume=500000, batch_si
         successful_fetches = 0
         
         status_text.text(f"Starting enhanced scan of {total_symbols} US stocks...")
+        
+        # Randomize symbol order to scan different stocks each time
+        import random
+        random.shuffle(symbols)
         
         for i, symbol in enumerate(symbols[:total_symbols]):
             try:
@@ -647,6 +651,7 @@ def get_us_recommendations(min_price=25, max_rsi=65, min_volume=500000, batch_si
                             'Sector': sector,
                             'Volatility': f"{target_data['volatility']:.1%}",
                             'BB Position': f"{bb_position:.2f}",
+                            'Weekly Status': 'Bullish' if len(data) >= 7 and data['Close'].iloc[-1] > data['Open'].iloc[-7] else 'Neutral',
                             'Data Quality': f"Real Data{fallback_note}" if not fallback_indicators else f"Mixed Data{fallback_note}",
                             'Status': 'Active'
                         })
