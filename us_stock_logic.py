@@ -546,8 +546,8 @@ def get_us_recommendations(min_price=25, max_rsi=65, min_volume=500000, batch_si
                 rsi_rising = False
                 if len(data['RSI']) >= 5:
                     recent_rsi = data['RSI'].tail(5)
-                    # RSI rising if current > 3 days ago (allows for 1-2 day dips)
-                    rsi_rising = (recent_rsi.iloc[-1] > recent_rsi.iloc[-3])
+                    # RSI rising if current > 1 days ago (allows for 1-2 day dips)
+                    rsi_rising = (recent_rsi.iloc[-1] > recent_rsi.iloc[-2])
                 else:
                     rsi_rising = True  # If insufficient data, don't filter out
                 
