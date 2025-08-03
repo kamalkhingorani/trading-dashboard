@@ -354,14 +354,14 @@ def get_indian_recommendations(min_price=25, max_rsi=70, min_volume=50000, batch
         progress_bar = st.progress(0)
         status_text = st.empty()
         
+        # Randomize symbol order FIRST to scan different stocks each time
+        import random
+        random.shuffle(symbols)
+        
         total_symbols = min(len(symbols), batch_size)
         successful_fetches = 0
         
         status_text.text(f"Starting enhanced scan of {total_symbols} Indian stocks...")
-        
-        # Randomize symbol order to scan different stocks each time
-        import random
-        random.shuffle(symbols)
         
         for i, symbol in enumerate(symbols[:total_symbols]):
             try:
