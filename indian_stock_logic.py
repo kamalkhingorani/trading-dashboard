@@ -200,6 +200,22 @@ def get_expanded_nse_universe():
             "UNIONBANK.NS", "UPL.NS", "WOCKPHARMA.NS", "YESBANK.NS", "ZEEL.NS", "ZYDUSLIFE.NS"
         ]
 
+def get_indian_stock_sector(symbol):
+    """Indian stock sector mapping"""
+    sector_mapping = {
+        # Banking & Financial
+        'RELIANCE': 'Energy', 'TCS': 'IT', 'HDFCBANK': 'Banking', 'INFY': 'IT', 'ICICIBANK': 'Banking',
+        'KOTAKBANK': 'Banking', 'SBIN': 'Banking', 'BHARTIARTL': 'Telecom', 'ASIANPAINT': 'Paints', 'ITC': 'FMCG',
+        'AXISBANK': 'Banking', 'LT': 'Infrastructure', 'SUNPHARMA': 'Pharma', 'TITAN': 'Jewellery', 'WIPRO': 'IT',
+        'MARUTI': 'Auto', 'BAJFINANCE': 'Financial', 'TATASTEEL': 'Steel', 'ONGC': 'Oil&Gas', 'COALINDIA': 'Mining',
+        'HDFCLIFE': 'Insurance', 'ICICIGI': 'Insurance', 'SBILIFE': 'Insurance', 'BAJAJFINSV': 'Financial', 'INDUSINDBK': 'Banking',
+        'HCLTECH': 'IT', 'TECHM': 'IT', 'DRREDDY': 'Pharma', 'CIPLA': 'Pharma', 'HINDUNILVR': 'FMCG',
+        'NESTLEIND': 'FMCG', 'BRITANNIA': 'FMCG', 'DABUR': 'FMCG', 'MARICO': 'FMCG', 'BPCL': 'Oil&Gas',
+        'IOC': 'Oil&Gas', 'NTPC': 'Power', 'POWERGRID': 'Power', 'HINDALCO': 'Metals', 'VEDL': 'Metals',
+        'JSWSTEEL': 'Steel', 'ULTRACEMCO': 'Cement', 'M&M': 'Auto', 'BAJAJ-AUTO': 'Auto', 'HEROMOTOCO': 'Auto'
+    }
+    return sector_mapping.get(symbol, 'Other')
+
 def calculate_dynamic_targets(data, current_price):
     """Calculate dynamic targets with fallback tracking"""
     try:
@@ -327,7 +343,7 @@ def calculate_dynamic_targets(data, current_price):
             }
         }
 
-def get_indian_recommendations(min_price=25, max_rsi=70, min_volume=50000, batch_size=50):
+def get_indian_recommendations(min_price=25, max_rsi=70, min_volume=50000, batch_size=200):
     """ENHANCED: Get Indian stock recommendations with technical reasoning"""
     
     try:
@@ -342,6 +358,10 @@ def get_indian_recommendations(min_price=25, max_rsi=70, min_volume=50000, batch
         successful_fetches = 0
         
         status_text.text(f"Starting enhanced scan of {total_symbols} Indian stocks...")
+        
+        # Randomize symbol order to scan different stocks each time
+        import random
+        random.shuffle(symbols)
         
         for i, symbol in enumerate(symbols[:total_symbols]):
             try:
@@ -452,6 +472,9 @@ def get_indian_recommendations(min_price=25, max_rsi=70, min_volume=50000, batch
                             
                         fallback_note = " (" + ", ".join(fallback_indicators) + ")" if fallback_indicators else ""
                         
+                        # Get sector
+                        sector = get_indian_stock_sector(symbol.replace('.NS', ''))
+                        
                         recommendations.append({
                             'Date': datetime.now().strftime('%Y-%m-%d'),
                             'Stock': symbol.replace('.NS', ''),
@@ -468,6 +491,7 @@ def get_indian_recommendations(min_price=25, max_rsi=70, min_volume=50000, batch
                             'Volume': int(avg_volume),
                             'Risk': risk_rating,
                             'Tech Score': f"{technical_score}/5",
+                            'Sector': sector,
                             'Volatility': f"{target_data['volatility']:.1%}",
                             'Data Quality': f"Real Data{fallback_note}" if not fallback_indicators else f"Mixed Data{fallback_note}",
                             'Status': 'Active'
