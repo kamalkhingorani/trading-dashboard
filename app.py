@@ -17,10 +17,10 @@ def safe_import_modules():
         modules['indian_stock'] = True
         modules['get_indian_recommendations'] = indian_stock_logic.get_indian_recommendations
         modules['get_indian_market_overview'] = indian_stock_logic.get_indian_market_overview
-        st.success("✅ Indian stock logic imported successfully")
+        st.success("✅ indian stock logic imported successfully")
     except Exception as e:
         modules['indian_stock'] = False
-        st.error(f"❌ Indian stock logic import failed: {e}")
+        st.error(f"❌ indian stock logic import failed: {e}")
     
     try:
         import us_stock_logic
@@ -53,9 +53,9 @@ def safe_import_modules():
     
     return modules
 
-# Fallback Indian stock function (ORIGINAL - PRESERVED)
+# Fallback indian stock function (ORIGINAL - PRESERVED)
 def fallback_indian_recommendations(min_price=25, max_rsi=70, min_volume=50000, batch_size=30):
-    """Fallback Indian stock scanner when main module fails"""
+    """Fallback indian stock scanner when main module fails"""
     symbols = [
         "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS",
         "KOTAKBANK.NS", "SBIN.NS", "BHARTIARTL.NS", "ASIANPAINT.NS", "ITC.NS",
