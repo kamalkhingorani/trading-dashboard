@@ -540,7 +540,7 @@ def get_us_recommendations(min_price=25, max_rsi=65, min_volume=500000, batch_si
                 current_price = latest['Close']
                 rsi = latest['RSI']
                 
-                current_rsi = rsi.iloc[-1] if not pd.isna(rsi.iloc[-1]) else 50
+                current_rsi = rsi if not pd.isna(rsi) else 50
                 
                 # Check RSI rising trend
                 rsi_rising = False
