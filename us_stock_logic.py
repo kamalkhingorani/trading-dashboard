@@ -539,6 +539,8 @@ def get_us_recommendations(min_price=25, max_rsi=65, min_volume=500000, batch_si
                 latest = data.iloc[-1]
                 current_price = latest['Close']
                 rsi = latest['RSI']
+                current_rsi = rsi if not pd.isna(rsi) else 50
+                rsi_is_dummy = pd.isna(rsi)
                 
                 current_rsi = rsi.iloc[-1] if not pd.isna(rsi.iloc[-1]) else 50
                 
@@ -643,7 +645,7 @@ def get_us_recommendations(min_price=25, max_rsi=65, min_volume=500000, batch_si
                             'Date': datetime.now().strftime('%Y-%m-%d'),
                             'Stock': symbol,
                             'LTP': round(current_price, 2),
-                            'RSI': f"{round(current_rsi, 1)} ({rsi_rising_days}D↑)" if rsi_rising else round(current_rsi, 1),
+                           'RSI': f"{round(current_rsi, 1)}{'*' if rsi_is_dummy else ''} ({rsi_rising_days}D↑)" if rsi_rising else f"{round(current_rsi, 1)}{'*' if rsi_is_dummy else ''}",
                             'Target': round(target_data['target'], 2),
                             '% Gain': round(target_data['target_pct'], 1),
                             'Est.Days': target_data['estimated_days'],
