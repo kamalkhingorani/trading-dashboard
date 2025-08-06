@@ -140,81 +140,45 @@ def analyze_technical_patterns(data, symbol):
         }
 
 def get_expanded_nse_universe():
-    """Complete NSE universe - 1800+ stocks"""
-    try:
-        # Try to fetch complete NSE equity list (1800+ stocks)
-        nse_equity_url = "https://archives.nseindia.com/content/equities/EQUITY_L.csv"
-        nse_df = pd.read_csv(nse_equity_url)
-        all_nse_symbols = [symbol.strip() + ".NS" for symbol in nse_df['SYMBOL'].tolist()]
-        return all_nse_symbols
+    """Expanded NSE stock universe"""
+    return [
+        # Large Cap - Core Holdings
+        "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS",
+        "KOTAKBANK.NS", "SBIN.NS", "BHARTIARTL.NS", "ASIANPAINT.NS", "ITC.NS",
+        "AXISBANK.NS", "LT.NS", "SUNPHARMA.NS", "TITAN.NS", "WIPRO.NS",
+        "MARUTI.NS", "BAJFINANCE.NS", "TATASTEEL.NS", "ONGC.NS", "COALINDIA.NS",
         
-    except Exception:
-        # Fallback to expanded manual list
-        return [
-            "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS",
-            "KOTAKBANK.NS", "SBIN.NS", "BHARTIARTL.NS", "ASIANPAINT.NS", "ITC.NS",
-            "AXISBANK.NS", "LT.NS", "SUNPHARMA.NS", "TITAN.NS", "WIPRO.NS",
-            "MARUTI.NS", "BAJFINANCE.NS", "TATASTEEL.NS", "ONGC.NS", "COALINDIA.NS",
-            "HDFCLIFE.NS", "ICICIGI.NS", "SBILIFE.NS", "BAJAJFINSV.NS", "INDUSINDBK.NS",
-            "BANDHANBNK.NS", "FEDERALBNK.NS", "IDFCFIRSTB.NS", "PNB.NS", "CANBK.NS",
-            "HCLTECH.NS", "TECHM.NS", "LTIM.NS", "MPHASIS.NS", "PERSISTENT.NS",
-            "DRREDDY.NS", "CIPLA.NS", "APOLLOHOSP.NS", "FORTIS.NS", "BIOCON.NS",
-            "DIVISLAB.NS", "GLENMARK.NS", "AUROPHARMA.NS", "LUPIN.NS",
-            "HINDUNILVR.NS", "NESTLEIND.NS", "BRITANNIA.NS", "DABUR.NS", "MARICO.NS",
-            "GODREJCP.NS", "COLPAL.NS", "UBL.NS", "TATACONSUM.NS",
-            "M&M.NS", "BAJAJ-AUTO.NS", "HEROMOTOCO.NS", "TATAMOTORS.NS", "EICHERMOT.NS",
-            "APOLLOTYRE.NS", "MRF.NS", "MOTHERSON.NS", "BOSCHLTD.NS",
-            "BPCL.NS", "IOC.NS", "HINDPETRO.NS", "GAIL.NS", "NTPC.NS",
-            "POWERGRID.NS", "ADANIPOWER.NS", "TATAPOWER.NS",
-            "HINDALCO.NS", "VEDL.NS", "JSWSTEEL.NS", "SAIL.NS", "NMDC.NS",
-            "JINDALSTEL.NS", "HINDZINC.NS", "WELCORP.NS",
-            "PIDILITIND.NS", "BERGEPAINT.NS", "HAVELLS.NS", "VOLTAS.NS",
-            "DIXON.NS", "SYMPHONY.NS", "IRCTC.NS", "BEL.NS", "HAL.NS",
-            "ACC.NS", "ADANIENT.NS", "ADANIPORTS.NS", "AMARAJABAT.NS", "AMBUJACEM.NS",
-            "ASHOKLEY.NS", "BALKRISIND.NS", "BANKINDIA.NS", "BATAINDIA.NS",
-            "BHARATFORG.NS", "BHEL.NS", "CADILAHC.NS", "CASTROLIND.NS", "CENTURYTEX.NS",
-            "CESC.NS", "CHOLAFIN.NS", "COCHINSHIP.NS", "CONCOR.NS", "CRISIL.NS",
-            "CROMPTON.NS", "CUB.NS", "CUMMINSIND.NS", "DALBHARAT.NS", "DEEPAKNTR.NS",
-            "DELTACORP.NS", "DLF.NS", "ENGINERSIN.NS", "EQUITAS.NS", "ESCORTS.NS",
-            "EXIDEIND.NS", "FORTIS.NS", "GMRINFRA.NS", "GNFC.NS", "GODREJIND.NS",
-            "GODREJPROP.NS", "GRANULES.NS", "GRASIM.NS", "GSPL.NS", "GUJALKALI.NS",
-            "GUJGASLTD.NS", "HDFC.NS", "HDFCAMC.NS", "HEIDELBERG.NS", "HEXAWARE.NS",
-            "HINDCOPPER.NS", "HONAUT.NS", "HUDCO.NS", "IBULHSGFIN.NS", "ICICIPRULI.NS",
-            "IDEA.NS", "IDFC.NS", "IEX.NS", "IFCI.NS", "IGL.NS",
-            "INDHOTEL.NS", "INDIACEM.NS", "INDIAMART.NS", "INDIANB.NS", "INDIGO.NS",
-            "INDUSTOWER.NS", "INFIBEAM.NS", "IOB.NS", "IPCALAB.NS", "IRB.NS",
-            "IRCON.NS", "ISEC.NS", "JKCEMENT.NS", "JKLAKSHMI.NS", "JMFINANCIL.NS",
-            "JSWENERGY.NS", "JUBLFOOD.NS", "JUSTDIAL.NS", "KAJARIACER.NS", "KANSAINER.NS",
-            "KEI.NS", "KNRCON.NS", "KPRMILL.NS", "KRBL.NS", "L&TFH.NS",
-            "LALPATHLAB.NS", "LAURUSLABS.NS", "LICHSGFIN.NS", "LTTS.NS", "MANAPPURAM.NS",
-            "MAXHEALTH.NS", "MCDOWELL-N.NS", "MCX.NS", "MINDTREE.NS", "MMTC.NS",
-            "MOIL.NS", "MUTHOOTFIN.NS", "NATIONALUM.NS", "NAUKRI.NS", "NAVINFLUOR.NS",
-            "NBCC.NS", "NCC.NS", "NHPC.NS", "NOCIL.NS", "OBEROIRLTY.NS",
-            "OFSS.NS", "OIL.NS", "ORIENTELEC.NS", "PAGEIND.NS", "PETRONET.NS",
-            "PFC.NS", "PFIZER.NS", "POLYCAB.NS", "PRAJIND.NS", "PRESTIGE.NS",
-            "PVR.NS", "QUESS.NS", "RADICO.NS", "RAIN.NS", "RAJESHEXPO.NS",
-            "RAMCOCEM.NS", "RBLBANK.NS", "RECLTD.NS", "RELCAPITAL.NS", "RELINFRA.NS",
-            "RNAM.NS", "SBICARD.NS", "SHREECEM.NS", "SIEMENS.NS", "SRF.NS",
-            "SRTRANSFIN.NS", "SUNTV.NS", "SYNDIBANK.NS", "TATACHEM.NS", "TATACOMM.NS",
-            "TORNTPHARM.NS", "TRENT.NS", "TVSMOTOR.NS", "UJJIVAN.NS", "ULTRACEMCO.NS",
-            "UNIONBANK.NS", "UPL.NS", "WOCKPHARMA.NS", "YESBANK.NS", "ZEEL.NS", "ZYDUSLIFE.NS"
-        ]
-
-def get_indian_stock_sector(symbol):
-    """Indian stock sector mapping"""
-    sector_mapping = {
-        # Banking & Financial
-        'RELIANCE': 'Energy', 'TCS': 'IT', 'HDFCBANK': 'Banking', 'INFY': 'IT', 'ICICIBANK': 'Banking',
-        'KOTAKBANK': 'Banking', 'SBIN': 'Banking', 'BHARTIARTL': 'Telecom', 'ASIANPAINT': 'Paints', 'ITC': 'FMCG',
-        'AXISBANK': 'Banking', 'LT': 'Infrastructure', 'SUNPHARMA': 'Pharma', 'TITAN': 'Jewellery', 'WIPRO': 'IT',
-        'MARUTI': 'Auto', 'BAJFINANCE': 'Financial', 'TATASTEEL': 'Steel', 'ONGC': 'Oil&Gas', 'COALINDIA': 'Mining',
-        'HDFCLIFE': 'Insurance', 'ICICIGI': 'Insurance', 'SBILIFE': 'Insurance', 'BAJAJFINSV': 'Financial', 'INDUSINDBK': 'Banking',
-        'HCLTECH': 'IT', 'TECHM': 'IT', 'DRREDDY': 'Pharma', 'CIPLA': 'Pharma', 'HINDUNILVR': 'FMCG',
-        'NESTLEIND': 'FMCG', 'BRITANNIA': 'FMCG', 'DABUR': 'FMCG', 'MARICO': 'FMCG', 'BPCL': 'Oil&Gas',
-        'IOC': 'Oil&Gas', 'NTPC': 'Power', 'POWERGRID': 'Power', 'HINDALCO': 'Metals', 'VEDL': 'Metals',
-        'JSWSTEEL': 'Steel', 'ULTRACEMCO': 'Cement', 'M&M': 'Auto', 'BAJAJ-AUTO': 'Auto', 'HEROMOTOCO': 'Auto'
-    }
-    return sector_mapping.get(symbol, 'Other')
+        # Banking & Financial Services  
+        "HDFCLIFE.NS", "ICICIGI.NS", "SBILIFE.NS", "BAJAJFINSV.NS", "INDUSINDBK.NS",
+        "BANDHANBNK.NS", "FEDERALBNK.NS", "IDFCFIRSTB.NS", "PNB.NS", "CANBK.NS",
+        
+        # Technology & IT Services
+        "HCLTECH.NS", "TECHM.NS", "LTIM.NS", "MPHASIS.NS", "PERSISTENT.NS",
+        
+        # Pharmaceuticals & Healthcare
+        "DRREDDY.NS", "CIPLA.NS", "APOLLOHOSP.NS", "FORTIS.NS", "BIOCON.NS",
+        "DIVISLAB.NS", "GLENMARK.NS", "AUROPHARMA.NS", "LUPIN.NS",
+        
+        # Consumer Goods & FMCG
+        "HINDUNILVR.NS", "NESTLEIND.NS", "BRITANNIA.NS", "DABUR.NS", "MARICO.NS",
+        "GODREJCP.NS", "COLPAL.NS", "UBL.NS", "TATACONSUM.NS",
+        
+        # Automobiles & Auto Ancillaries
+        "M&M.NS", "BAJAJ-AUTO.NS", "HEROMOTOCO.NS", "TATAMOTORS.NS", "EICHERMOT.NS",
+        "APOLLOTYRE.NS", "MRF.NS", "MOTHERSON.NS", "BOSCHLTD.NS",
+        
+        # Oil, Gas & Energy
+        "BPCL.NS", "IOC.NS", "HINDPETRO.NS", "GAIL.NS", "NTPC.NS",
+        "POWERGRID.NS", "ADANIPOWER.NS", "TATAPOWER.NS",
+        
+        # Metals & Mining
+        "HINDALCO.NS", "VEDL.NS", "JSWSTEEL.NS", "SAIL.NS", "NMDC.NS",
+        "JINDALSTEL.NS", "HINDZINC.NS", "WELCORP.NS",
+        
+        # Additional Quality Stocks
+        "PIDILITIND.NS", "BERGEPAINT.NS", "HAVELLS.NS", "VOLTAS.NS",
+        "DIXON.NS", "SYMPHONY.NS", "IRCTC.NS", "BEL.NS", "HAL.NS"
+    ]
 
 def calculate_dynamic_targets(data, current_price):
     """Calculate dynamic targets with fallback tracking"""
@@ -343,7 +307,7 @@ def calculate_dynamic_targets(data, current_price):
             }
         }
 
-def get_indian_recommendations(min_price=25, max_rsi=70, min_volume=50000, batch_size=200):
+def get_indian_recommendations(min_price=25, max_rsi=70, min_volume=50000, batch_size=50):
     """ENHANCED: Get Indian stock recommendations with technical reasoning"""
     
     try:
@@ -353,10 +317,6 @@ def get_indian_recommendations(min_price=25, max_rsi=70, min_volume=50000, batch
         # Show progress
         progress_bar = st.progress(0)
         status_text = st.empty()
-        
-        # Randomize symbol order FIRST to scan different stocks each time
-        import random
-        random.shuffle(symbols)
         
         total_symbols = min(len(symbols), batch_size)
         successful_fetches = 0
@@ -393,22 +353,6 @@ def get_indian_recommendations(min_price=25, max_rsi=70, min_volume=50000, batch
                 current_price = latest['Close']
                 rsi = latest['RSI']
                 
-                current_rsi = rsi.iloc[-1] if not pd.isna(rsi.iloc[-1]) else 50
-                
-                # Check RSI rising trend (2 consecutive days preferred)
-                rsi_rising = False
-                rsi_rising_days = 0
-                if len(data['RSI']) >= 4:
-                    recent_rsi = data['RSI'].tail(4)
-                    # Check 2 consecutive days rising
-                    if (recent_rsi.iloc[-1] > recent_rsi.iloc[-2] > recent_rsi.iloc[-3]):
-                        rsi_rising = True
-                        rsi_rising_days = 2
-                    # Check 1 day rising
-                    elif (recent_rsi.iloc[-1] > recent_rsi.iloc[-2]):
-                        rsi_rising = True
-                        rsi_rising_days = 1
-                
                 # Volume handling with fallback tracking
                 avg_volume = data['Volume'].tail(10).mean() if 'Volume' in data.columns else min_volume
                 volume_is_fallback = 'Volume' not in data.columns
@@ -416,7 +360,6 @@ def get_indian_recommendations(min_price=25, max_rsi=70, min_volume=50000, batch
                 # Apply filters
                 if (current_price >= min_price and 
                     rsi <= max_rsi and
-                    rsi_rising and
                     not pd.isna(rsi) and 
                     not pd.isna(current_price) and
                     avg_volume >= min_volume * 0.3):
@@ -480,14 +423,11 @@ def get_indian_recommendations(min_price=25, max_rsi=70, min_volume=50000, batch
                             
                         fallback_note = " (" + ", ".join(fallback_indicators) + ")" if fallback_indicators else ""
                         
-                        # Get sector
-                        sector = get_indian_stock_sector(symbol.replace('.NS', ''))
-                        
                         recommendations.append({
                             'Date': datetime.now().strftime('%Y-%m-%d'),
                             'Stock': symbol.replace('.NS', ''),
                             'LTP': round(current_price, 2),
-                            'RSI': f"{round(current_rsi, 1)} ({rsi_rising_days}D↑)" if rsi_rising else round(current_rsi, 1),
+                            'RSI': round(rsi, 1),
                             'Target': round(target_data['target'], 2),
                             '% Gain': round(target_data['target_pct'], 1),
                             'Est.Days': target_data['estimated_days'],
@@ -499,8 +439,6 @@ def get_indian_recommendations(min_price=25, max_rsi=70, min_volume=50000, batch
                             'Volume': int(avg_volume),
                             'Risk': risk_rating,
                             'Tech Score': f"{technical_score}/5",
-                            'Sector': sector,
-                            'Weekly Status': 'Bullish' if len(data) >= 5 and data['Close'].iloc[-1] > data['Open'].iloc[-5] else 'Neutral',
                             'Volatility': f"{target_data['volatility']:.1%}",
                             'Data Quality': f"Real Data{fallback_note}" if not fallback_indicators else f"Mixed Data{fallback_note}",
                             'Status': 'Active'
