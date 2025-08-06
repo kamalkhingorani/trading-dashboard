@@ -397,19 +397,18 @@ def get_indian_recommendations(min_price=25, max_rsi=70, min_volume=50000, batch
                 
                 current_rsi = rsi.iloc[-1] if not pd.isna(rsi.iloc[-1]) else 50
                 
-                # Check RSI rising trend (2 consecutive days preferred)
-                rsi_rising = False
+                # Check RSI rising trend (relaxed criteria)
+                rsi_rising = True  # Default to true
                 rsi_rising_days = 0
                 if len(data['RSI']) >= 4:
                     recent_rsi = data['RSI'].tail(4)
                     # Check 2 consecutive days rising
                     if (recent_rsi.iloc[-1] > recent_rsi.iloc[-2] > recent_rsi.iloc[-3]):
-                        rsi_rising = True
                         rsi_rising_days = 2
                     # Check 1 day rising
                     elif (recent_rsi.iloc[-1] > recent_rsi.iloc[-2]):
-                        rsi_rising = True
                         rsi_rising_days = 1
+                    # Even if not rising, still include (but show 0 days)
                 
                 # Volume handling with fallback tracking
                 avg_volume = data['Volume'].tail(10).mean() if 'Volume' in data.columns else min_volume
