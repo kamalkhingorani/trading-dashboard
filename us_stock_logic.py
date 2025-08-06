@@ -562,9 +562,9 @@ def get_us_recommendations(min_price=25, max_rsi=65, min_volume=500000, batch_si
                 
                 # Apply filters
                 if (current_price >= min_price and 
-                    rsi <= max_rsi and
+                    current_rsi <= max_rsi and
                     rsi_rising and
-                    not pd.isna(rsi) and 
+                    not pd.isna(current_rsi) and 
                     not pd.isna(current_price) and
                     avg_volume >= min_volume * 0.2):
                     
@@ -589,7 +589,7 @@ def get_us_recommendations(min_price=25, max_rsi=65, min_volume=500000, batch_si
                         score_components.append("EMA Bullish")
                     
                     # RSI conditions
-                    if 20 <= rsi <= 65:
+                    if 20 <= current_rsi <= 65:
                         technical_score += 1
                         score_components.append("Good RSI")
                     
@@ -659,7 +659,7 @@ def get_us_recommendations(min_price=25, max_rsi=65, min_volume=500000, batch_si
                             'Sector': sector,
                             'Volatility': f"{target_data['volatility']:.1%}",
                             'BB Position': f"{bb_position:.2f}",
-                            'Weekly Status': 'Bullish' if len(data) >= 7 and data['Close'].iloc[-1] > data['Open'].iloc[-7] else 'Neutral',
+                            'Weekly Status': 'Bullish' if latest['Close'] > latest['Open'] else 'Bearish',
                             'Data Quality': f"Real Data{fallback_note}" if not fallback_indicators else f"Mixed Data{fallback_note}",
                             'Status': 'Active'
                         })
