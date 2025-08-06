@@ -392,23 +392,22 @@ def get_indian_recommendations(min_price=25, max_rsi=70, min_volume=50000, batch
                 latest = data.iloc[-1]
                 current_price = latest['Close']
                 rsi = latest['RSI']
-                current_rsi = rsi if not pd.isna(rsi) else 50
-                rsi_is_dummy = pd.isna(rsi)
                 
                 current_rsi = rsi.iloc[-1] if not pd.isna(rsi.iloc[-1]) else 50
                 
-                # Check RSI rising trend (relaxed criteria)
-                rsi_rising = True  # Default to true
+                # Check RSI rising trend (2 consecutive days preferred)
+                rsi_rising = False
                 rsi_rising_days = 0
                 if len(data['RSI']) >= 4:
                     recent_rsi = data['RSI'].tail(4)
                     # Check 2 consecutive days rising
                     if (recent_rsi.iloc[-1] > recent_rsi.iloc[-2] > recent_rsi.iloc[-3]):
+                        rsi_rising = True
                         rsi_rising_days = 2
                     # Check 1 day rising
                     elif (recent_rsi.iloc[-1] > recent_rsi.iloc[-2]):
+                        rsi_rising = True
                         rsi_rising_days = 1
-                    # Even if not rising, still include (but show 0 days)
                 
                 # Volume handling with fallback tracking
                 avg_volume = data['Volume'].tail(10).mean() if 'Volume' in data.columns else min_volume
@@ -416,9 +415,9 @@ def get_indian_recommendations(min_price=25, max_rsi=70, min_volume=50000, batch
                 
                 # Apply filters
                 if (current_price >= min_price and 
-                    current_rsi <= max_rsi and
+                    rsi <= max_rsi and
                     rsi_rising and
-                    not pd.isna(current_rsi) and 
+                    not pd.isna(rsi) and 
                     not pd.isna(current_price) and
                     avg_volume >= min_volume * 0.3):
                     
@@ -443,7 +442,7 @@ def get_indian_recommendations(min_price=25, max_rsi=70, min_volume=50000, batch
                         score_components.append("EMA Bullish")
                     
                     # RSI conditions
-                    if 25 <= current_rsi <= 70:
+                    if 25 <= rsi <= 70:
                         technical_score += 1
                         score_components.append("Good RSI")
                     
@@ -488,7 +487,7 @@ def get_indian_recommendations(min_price=25, max_rsi=70, min_volume=50000, batch
                             'Date': datetime.now().strftime('%Y-%m-%d'),
                             'Stock': symbol.replace('.NS', ''),
                             'LTP': round(current_price, 2),
-                            'RSI': f"{round(current_rsi, 1)}{'*' if rsi_is_dummy else ''} ({rsi_rising_days}D↑)" if rsi_rising else f"{round(current_rsi, 1)}{'*' if rsi_is_dummy else ''}",
+                            'RSI': f"{round(current_rsi, 1)} ({rsi_rising_days}D↑)" if rsi_rising else round(current_rsi, 1),
                             'Target': round(target_data['target'], 2),
                             '% Gain': round(target_data['target_pct'], 1),
                             'Est.Days': target_data['estimated_days'],
@@ -501,7 +500,7 @@ def get_indian_recommendations(min_price=25, max_rsi=70, min_volume=50000, batch
                             'Risk': risk_rating,
                             'Tech Score': f"{technical_score}/5",
                             'Sector': sector,
-                            'Weekly Status': 'Bullish' if latest['Close'] > latest['Open'] else 'Bearish',
+                            'Weekly Status': 'Bullish' if len(data) >= 5 and data['Close'].iloc[-1] > data['Open'].iloc[-5] else 'Neutral',
                             'Volatility': f"{target_data['volatility']:.1%}",
                             'Data Quality': f"Real Data{fallback_note}" if not fallback_indicators else f"Mixed Data{fallback_note}",
                             'Status': 'Active'
