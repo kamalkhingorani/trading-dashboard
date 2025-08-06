@@ -415,9 +415,9 @@ def get_indian_recommendations(min_price=25, max_rsi=70, min_volume=50000, batch
                 
                 # Apply filters
                 if (current_price >= min_price and 
-                    rsi <= max_rsi and
+                    current_rsi <= max_rsi and
                     rsi_rising and
-                    not pd.isna(rsi) and 
+                    not pd.isna(current_rsi) and 
                     not pd.isna(current_price) and
                     avg_volume >= min_volume * 0.3):
                     
@@ -442,7 +442,7 @@ def get_indian_recommendations(min_price=25, max_rsi=70, min_volume=50000, batch
                         score_components.append("EMA Bullish")
                     
                     # RSI conditions
-                    if 25 <= rsi <= 70:
+                    if 25 <= current_rsi <= 70:
                         technical_score += 1
                         score_components.append("Good RSI")
                     
@@ -500,7 +500,7 @@ def get_indian_recommendations(min_price=25, max_rsi=70, min_volume=50000, batch
                             'Risk': risk_rating,
                             'Tech Score': f"{technical_score}/5",
                             'Sector': sector,
-                            'Weekly Status': 'Bullish' if len(data) >= 5 and data['Close'].iloc[-1] > data['Open'].iloc[-5] else 'Neutral',
+                            'Weekly Status': 'Bullish' if latest['Close'] > latest['Open'] else 'Bearish',
                             'Volatility': f"{target_data['volatility']:.1%}",
                             'Data Quality': f"Real Data{fallback_note}" if not fallback_indicators else f"Mixed Data{fallback_note}",
                             'Status': 'Active'
