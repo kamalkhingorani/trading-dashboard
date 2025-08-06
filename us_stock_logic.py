@@ -207,90 +207,38 @@ def analyze_us_technical_patterns(data, symbol):
         }
 
 def get_expanded_sp500_universe():
-    """Complete S&P 500 universe"""
-    try:
-        # Fetch S&P 500 list from Wikipedia
-        sp500_url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-        sp500_df = pd.read_html(sp500_url)[0]
-        return sp500_df['Symbol'].tolist()
+    """Expanded S&P 500 universe with sector diversity"""
+    return [
+        # Mega Cap Technology
+        "AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "NVDA", "NFLX", "ADBE",
+        "CRM", "ORCL", "INTC", "AMD", "QCOM", "AVGO", "CSCO", "IBM", "INTU",
+        "NOW", "WDAY", "VEEV", "DDOG", "SNOW", "CRWD", "ZS", "OKTA",
         
-    except Exception:
-        # Fallback to complete manual S&P 500 list (500 unique stocks)
-        return [
-            # Technology
-            "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "TSLA", "META", "NVDA", "NFLX", "ADBE",
-            "CRM", "ORCL", "INTC", "AMD", "QCOM", "AVGO", "CSCO", "IBM", "INTU", "NOW",
-            "WDAY", "VEEV", "DDOG", "SNOW", "CRWD", "ZS", "OKTA", "ANET", "FTNT", "PANW",
-            "VRSN", "JNPR", "NTAP", "WDC", "STX", "HPQ", "HPE", "DELL", "VMW", "CTSH",
-            "ACN", "EPAM", "LDOS", "DXC", "IT", "GLW", "APH", "TEL", "MCHP", "KLAC",
-            
-            # Financial Services
-            "JPM", "BAC", "WFC", "GS", "MS", "C", "AXP", "V", "MA", "BK", "USB", "PNC",
-            "COF", "SCHW", "BLK", "SPGI", "MCO", "AIG", "TRV", "ALL", "PGR", "AFL",
-            "MET", "PRU", "AMP", "TROW", "BEN", "IVZ", "NDAQ", "ICE", "CME", "CBOE",
-            "FIS", "FISV", "PYPL", "SQ", "AFRM", "LC", "ALLY", "FITB", "RF", "CFG",
-            "HBAN", "KEY", "CMA", "ZION", "EWBC", "PBCT", "WBS", "MTB", "STI", "BBT",
-            
-            # Healthcare & Pharmaceuticals
-            "JNJ", "PFE", "UNH", "ABBV", "TMO", "ABT", "MDT", "BMY", "AMGN", "GILD",
-            "REGN", "BSX", "SYK", "ISRG", "ZBH", "BDX", "EW", "ALGN", "MRNA", "BNTX",
-            "CVS", "ANTM", "CI", "HUM", "CNC", "DXCM", "ZTS", "IDEXX", "CAH", "MCK",
-            "ABC", "WBA", "ILMN", "A", "DHR", "WAT", "PKI", "LH", "DGX", "HOLX",
-            "TECH", "QDEL", "QGEN", "MYGN", "EXAS", "TDOC", "AMWL", "DOCS", "VEEV", "TMDX",
-            
-            # Energy
-            "XOM", "CVX", "COP", "EOG", "SLB", "MPC", "VLO", "PSX", "OXY", "HAL",
-            "BKR", "FTI", "NOV", "RIG", "HP", "MRO", "APA", "DVN", "FANG", "PXD",
-            "CXO", "CLR", "NBL", "COG", "CNX", "EQT", "AR", "CHK", "WPX", "PE",
-            "PDCE", "MTDR", "CDEV", "CPE", "WLL", "GPOR", "NEXT", "CRC", "OAS", "SM",
-            "MGY", "REI", "CRZO", "HES", "KMI", "EPD", "ET", "MPLX", "WMB", "OKE",
-            
-            # Consumer Discretionary
-            "AMZN", "HD", "LOW", "TGT", "NKE", "TJX", "ROST", "YUM", "CMG", "SBUX",
-            "ULTA", "DIS", "F", "GM", "EBAY", "ETSY", "W", "CHWY", "NCLH", "CCL",
-            "RCL", "MAR", "HLT", "H", "WH", "IHG", "EXPE", "BKNG", "TRIP", "ABNB",
-            "UBER", "LYFT", "DASH", "GRMN", "POOL", "LVS", "WYNN", "MGM", "CZR", "PENN",
-            "DRI", "EAT", "TXRH", "DNKN", "MCD", "QSR", "DPZ", "PZZA", "PLAY", "CKE",
-            
-            # Consumer Staples
-            "PG", "KO", "PEP", "WMT", "COST", "MCD", "KHC", "MNST", "KDP", "GIS",
-            "K", "CPB", "CAG", "SJM", "HSY", "MKC", "CLX", "CHD", "EL", "CL",
-            "KMB", "SYY", "KR", "WBA", "DG", "DLTR", "BJ", "ACI", "RAD", "RITE",
-            "TSN", "HRL", "CAG", "CPB", "GIS", "K", "SJM", "LW", "PM", "MO",
-            "BTI", "UVV", "TPG", "VGR", "XXII", "CRON", "CGC", "TLRY", "ACB", "HEXO",
-            
-            # Industrials
-            "CAT", "GE", "MMM", "HON", "UPS", "FDX", "EMR", "ETN", "ITW", "PH",
-            "CMI", "DE", "DOV", "IR", "JCI", "ROK", "XYL", "FLR", "PWR", "BLDR",
-            "VMC", "MLM", "NUE", "X", "CLF", "STLD", "RS", "CMC", "WOR", "PKG",
-            "CCK", "BALL", "CRH", "SUM", "JEC", "GNRC", "TXT", "LHX", "GD", "NOC",
-            "LMT", "RTX", "BA", "HII", "LDOS", "CACI", "SAIC", "KBR", "VST", "AIT",
-            
-            # Materials
-            "LIN", "APD", "ECL", "SHW", "FCX", "NEM", "FMC", "ALB", "EMN", "IFF",
-            "PPG", "CF", "MOS", "LYB", "DOW", "DD", "CE", "STLD", "MT", "TX",
-            "GOLD", "AEM", "KGC", "AU", "IAG", "HL", "CDE", "PAAS", "AG", "EXK",
-            "FSM", "SVM", "SBSW", "WPM", "FNV", "RGLD", "SAND", "SA", "VALE", "RIO",
-            "BHP", "SCCO", "TECK", "HBM", "FM", "CSTM", "UEC", "CCJ", "DNN", "UUUU",
-            
-            # Utilities
-            "NEE", "DUK", "SO", "AEP", "EXC", "XEL", "WEC", "ES", "AWK", "CMS",
-            "PEG", "ED", "ETR", "FE", "AES", "PPL", "D", "PCG", "EIX", "SRE",
-            "NI", "LNT", "EVRG", "CNP", "OGE", "PNW", "IDA", "MDU", "NWE", "AVA",
-            "BKH", "NJR", "SJI", "CPK", "UGI", "ALE", "SR", "NWN", "UTL", "MGEE",
-            
-            # Real Estate
-            "SPG", "PLD", "CCI", "AMT", "EQIX", "PSA", "EXR", "AVB", "EQR", "MAA",
-            "ESS", "UDR", "CPT", "AIV", "BXP", "VTR", "WELL", "HCP", "PEAK", "HR",
-            "SLG", "KIM", "REG", "FRT", "TCO", "MAC", "CBL", "SKT", "WPG", "PEI",
-            "ADC", "AKR", "BRX", "CDR", "DDR", "EQC", "GGP", "HIW", "HPP", "JBG",
-            
-            # Communication Services
-            "GOOGL", "GOOG", "META", "NFLX", "DIS", "CMCSA", "T", "VZ", "TMUS", "CHTR",
-            "ATVI", "EA", "TTWO", "ZNGA", "RBLX", "PINS", "SNAP", "TWTR", "MTCH", "BMBL",
-            "ROKU", "SPOT", "FUBO", "DISH", "SIRI", "NWSA", "FOXA", "VIAC", "DISCA", "IPG",
-            "OMC", "WPP", "LBRDA", "LBRDK", "LILAK", "CHTR", "CABO", "LILA", "QVCA", "BATRK"
-        ]
+        # Financial Services
+        "JPM", "BAC", "WFC", "GS", "MS", "C", "AXP", "V", "MA", "BK", "USB", 
+        "PNC", "COF", "SCHW", "BLK", "SPGI", "MCO", "AIG", "TRV", "ALL", "PGR",
+        
+        # Healthcare & Pharmaceuticals
+        "JNJ", "PFE", "UNH", "ABBV", "TMO", "ABT", "MDT", "BMY", "AMGN", "GILD",
+        "REGN", "BSX", "SYK", "ISRG", "ZBH", "BDX", "EW", "ALGN", "MRNA",
+        "CVS", "ANTM", "CI", "HUM", "CNC", "DXCM", "ZTS", "IDEXX",
+        
+        # Energy & Utilities
+        "XOM", "CVX", "COP", "EOG", "SLB", "MPC", "VLO", "PSX", "OXY", "HAL",
+        "NEE", "DUK", "SO", "AEP", "EXC", "XEL", "WEC", "ES", "AWK", "CMS",
+        
+        # Consumer & Retail  
+        "WMT", "HD", "LOW", "COST", "TGT", "PG", "KO", "PEP", "MCD", "SBUX",
+        "NKE", "TJX", "ROST", "YUM", "CMG", "ULTA", "DIS", "F", "GM",
+        
+        # Industrial & Defense
+        "CAT", "GE", "MMM", "HON", "UPS", "FDX", "EMR", "ETN", "ITW", "PH",
+        "BA", "LMT", "RTX", "NOC", "GD", "LHX", "TDG", "CMI", "DE", "DOV",
+        
+        # Materials & Chemicals
+        "LIN", "APD", "ECL", "SHW", "FCX", "NEM", "FMC", "ALB", "EMN", "IFF",
+        "PPG", "CF", "MOS", "LYB", "DOW", "DD", "CE", "VMC", "MLM", "NUE"
+    ]
 
 def get_stock_sector(symbol):
     """Enhanced sector mapping for US stocks"""
@@ -485,7 +433,7 @@ def calculate_us_dynamic_targets(data, current_price):
             }
         }
 
-def get_us_recommendations(min_price=25, max_rsi=65, min_volume=500000, batch_size=200):
+def get_us_recommendations(min_price=25, max_rsi=65, min_volume=500000, batch_size=60):
     """ENHANCED: Get US stock recommendations with technical reasoning"""
     
     try:
@@ -494,10 +442,6 @@ def get_us_recommendations(min_price=25, max_rsi=65, min_volume=500000, batch_si
         
         progress_bar = st.progress(0)
         status_text = st.empty()
-        
-        # Randomize symbol order FIRST to scan different stocks each time
-        import random
-        random.shuffle(symbols)
         
         total_symbols = min(len(symbols), batch_size)
         successful_fetches = 0
@@ -540,22 +484,6 @@ def get_us_recommendations(min_price=25, max_rsi=65, min_volume=500000, batch_si
                 current_price = latest['Close']
                 rsi = latest['RSI']
                 
-                current_rsi = rsi.iloc[-1] if not pd.isna(rsi.iloc[-1]) else 50
-                
-                # Check RSI rising trend (2 consecutive days preferred)
-                rsi_rising = False
-                rsi_rising_days = 0
-                if len(data['RSI']) >= 4:
-                    recent_rsi = data['RSI'].tail(4)
-                    # Check 2 consecutive days rising
-                    if (recent_rsi.iloc[-1] > recent_rsi.iloc[-2] > recent_rsi.iloc[-3]):
-                        rsi_rising = True
-                        rsi_rising_days = 2
-                    # Check 1 day rising
-                    elif (recent_rsi.iloc[-1] > recent_rsi.iloc[-2]):
-                        rsi_rising = True
-                        rsi_rising_days = 1
-                
                 # Volume handling
                 avg_volume = data['Volume'].tail(10).mean() if 'Volume' in data.columns else min_volume
                 volume_is_fallback = 'Volume' not in data.columns
@@ -563,7 +491,6 @@ def get_us_recommendations(min_price=25, max_rsi=65, min_volume=500000, batch_si
                 # Apply filters
                 if (current_price >= min_price and 
                     rsi <= max_rsi and
-                    rsi_rising and
                     not pd.isna(rsi) and 
                     not pd.isna(current_price) and
                     avg_volume >= min_volume * 0.2):
@@ -643,7 +570,7 @@ def get_us_recommendations(min_price=25, max_rsi=65, min_volume=500000, batch_si
                             'Date': datetime.now().strftime('%Y-%m-%d'),
                             'Stock': symbol,
                             'LTP': round(current_price, 2),
-                            'RSI': f"{round(current_rsi, 1)} ({rsi_rising_days}D↑)" if rsi_rising else round(current_rsi, 1),
+                            'RSI': round(rsi, 1),
                             'Target': round(target_data['target'], 2),
                             '% Gain': round(target_data['target_pct'], 1),
                             'Est.Days': target_data['estimated_days'],
@@ -659,7 +586,6 @@ def get_us_recommendations(min_price=25, max_rsi=65, min_volume=500000, batch_si
                             'Sector': sector,
                             'Volatility': f"{target_data['volatility']:.1%}",
                             'BB Position': f"{bb_position:.2f}",
-                            'Weekly Status': 'Bullish' if len(data) >= 7 and data['Close'].iloc[-1] > data['Open'].iloc[-7] else 'Neutral',
                             'Data Quality': f"Real Data{fallback_note}" if not fallback_indicators else f"Mixed Data{fallback_note}",
                             'Status': 'Active'
                         })
