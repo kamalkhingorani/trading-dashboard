@@ -438,11 +438,11 @@ st.markdown("""
 <em>Every scan automatically saves to: C:\\Users\\kamal\\Downloads\\DASHBOARD FILES\\</em>
 </div>
 """, unsafe_allow_html=True).indian_recos.to_string(index=False, max_cols=None, max_rows=None)
-        st.text_area("📋 Copy Exact Format (Select All + Ctrl+C):", copy_text, height=150, key="copy_indian_exact")
+st.text_area("📋 Copy Exact Format (Select All + Ctrl+C):", copy_text, height=150, key="copy_indian_exact")
         
-        with col2:
-            copy_tsv = st.session_state.indian_recos.to_csv(index=False, sep='\t')
-            st.text_area("📋 Copy for Excel (Tab-separated):", copy_tsv, height=150, key="copy_indian_excel")
+with col2:
+    copy_tsv = st.session_state.indian_recos.to_csv(index=False, sep='\t')
+    st.text_area("📋 Copy for Excel (Tab-separated):", copy_tsv, height=150, key="copy_indian_excel")
         
         st.dataframe(
             st.session_state.indian_recos, 
