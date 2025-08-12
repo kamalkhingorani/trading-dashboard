@@ -437,7 +437,8 @@ st.markdown("""
 💾 Local database storage • 🔄 Immediate append • 📊 Manual control<br>
 <em>Every scan automatically saves to: C:\\Users\\kamal\\Downloads\\DASHBOARD FILES\\</em>
 </div>
-""", unsafe_allow_html=True).indian_recos.to_string(index=False, max_cols=None, max_rows=None)
+""", unsafe_allow_html=True)
+copy_text = st.session_state.indian_recos.to_string(index=False, max_cols=None, max_rows=None)
 st.text_area("📋 Copy Exact Format (Select All + Ctrl+C):", copy_text, height=150, key="copy_indian_exact")
         
 with col2:
