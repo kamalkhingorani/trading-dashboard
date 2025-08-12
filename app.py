@@ -444,14 +444,14 @@ with col2:
     copy_tsv = st.session_state.indian_recos.to_csv(index=False, sep='\t')
     st.text_area("📋 Copy for Excel (Tab-separated):", copy_tsv, height=150, key="copy_indian_excel")
         
-        st.dataframe(
-            st.session_state.indian_recos, 
-            use_container_width=True, 
-            height=400,
-            column_config={
-                "Selection Reason": st.column_config.TextColumn(width="large")
-            }
-        )
+st.dataframe(
+    st.session_state.indian_recos, 
+    use_container_width=True, 
+    height=400,
+    column_config={
+        "Selection Reason": st.column_config.TextColumn(width="large")
+    }
+)
 
 # Tab 3: US Stocks
 with tab3:
