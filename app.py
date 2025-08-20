@@ -182,7 +182,7 @@ if TRACKING_AVAILABLE:
 # Create tabs
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["📰 Market News", "🇮🇳 Indian Stocks", "🇺🇸 US Stocks", "📊 F&O Options", "📋 Database View"])
 
-# Tab 1: Market News
+# Tab 1: Market News (MINIMAL FIXES FOR LINKS ONLY)
 with tab1:
     st.subheader("📰 Latest Market News & Analysis")
     
@@ -192,18 +192,50 @@ with tab1:
                 st.session_state.news_data = modules['get_latest_news']()
                 if st.session_state.news_data:
                     st.success(f"✅ Loaded {len(st.session_state.news_data)} latest news items")
+                else:
+                    st.warning("No news data available")
             except Exception as e:
                 st.error(f"Error loading news: {e}")
+        else:
+            # Sample news when module is not available
+            st.session_state.news_data = [
+                {
+                    'title': 'Markets Rally on Positive Economic Data',
+                    'summary': 'Indian markets surged 2% following strong GDP growth data and positive global cues.',
+                    'category': 'Markets',
+                    'market_impact': 'High',
+                    'source': 'Sample News',
+                    'time': datetime.now().strftime('%H:%M'),
+                    'date': datetime.now().strftime('%Y-%m-%d'),
+                    'link': 'https://example.com'
+                }
+            ]
+            st.info("Using sample news data (news module not available)")
     
     if st.session_state.news_data:
         for news in st.session_state.news_data:
             with st.container():
                 st.markdown(f"""
-                **{news.get('title', 'No Title')}**  
-                {news.get('summary', 'No summary available')}  
-                📊 **{news.get('category', 'General')}** | 🎯 **{news.get('market_impact', 'Low')}** Impact | 🕒 {news.get('time', 'Unknown')} IST
-                """)
-                st.markdown("---")
+                <div class="news-item">
+                <strong>{news.get('title', 'No Title')}</strong><br>
+                <em>{news.get('summary', 'No summary available')}</em><br>
+                <small>📊 <strong>{news.get('category', 'General')}</strong> | 
+                🎯 <strong>{news.get('market_impact', 'Low')}</strong> Impact | 
+                🕒 {news.get('time', 'Unknown')} IST | 
+                📅 {news.get('date', 'Unknown')} |
+                📰 {news.get('source', 'Unknown')}</small><br>
+                """, unsafe_allow_html=True)
+                
+                # MINIMAL FIX: Add clickable link
+                link = news.get('link', '')
+                if link and link != '':
+                    st.markdown(f"🔗 [Read Full Article]({link})")
+                else:
+                    st.markdown("🔗 Link unavailable")
+                
+                st.markdown("</div>", unsafe_allow_html=True)
+    else:
+        st.info("Click 'Refresh News' to load the latest market updates!")
 
 # Tab 2: Indian Stocks
 with tab2:
